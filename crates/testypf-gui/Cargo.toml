@@ -1,0 +1,39 @@
+[package]
+name = "testypf-gui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "GUI application for testypf font rendering tester"
+repository.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "testypf"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+env_logger.workspace = true
+# GUI framework
+iced = { workspace = true, features = ["image"] }
+log.workspace = true
+# Font loading
+read-fonts.workspace = true
+# File dialogs
+rfd = "0.14"
+serde.workspace = true
+serde_json.workspace = true
+# Core dependencies
+testypf-core = { path = "../testypf-core", default-features = false }
+# External dependencies
+thiserror.workspace = true
+tokio.workspace = true
+image = "0.25"
+
+[features]
+default = ["iced/default", "iced/image"]
+platform-mac = ["testypf-core/platform-mac"]
+platform-win = ["testypf-core/platform-win"]
+render-skia = []
+render-zeno = []

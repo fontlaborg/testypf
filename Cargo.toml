@@ -1,0 +1,48 @@
+[workspace]
+members = [
+    "crates/testypf-core",
+    "crates/testypf-gui",
+]
+resolver = "2"
+
+[workspace.package]
+version = "2.0.0-dev"
+authors = ["FontLab Ltd."]
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+repository = "https://github.com/fontlaborg/testypf"
+
+[workspace.dependencies]
+# GUI framework
+iced = { version = "0.12", features = ["image", "multi-window"] }
+
+# Core dependencies
+typf-py = { path = "../typf/bindings/python" }
+fontlift-core = { path = "../fontlift/crates/fontlift-core" }
+fontlift-cli = { path = "../fontlift/crates/fontlift-cli" }
+fontlift-platform-mac = { path = "../fontlift/crates/fontlift-platform-mac" }
+fontlift-platform-win = { path = "../fontlift/crates/fontlift-platform-win" }
+
+# External dependencies
+thiserror = "2.0"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+pyo3 = "0.22"
+
+# Font loading
+read-fonts = "0.36"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true

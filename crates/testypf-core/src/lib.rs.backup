@@ -1,0 +1,453 @@
+//! testypf-core - Core library for testypf GUI application
+//!
+//! This library provides the core functionality for the testypf GUI,
+//! including integration with typf for rendering and fontlift for font management.
+
+use std::path::PathBuf;
+use thiserror::Error;
+
+/// Core errors for testypf
+#[derive(Error, Debug)]
+pub enum TestypfError {
+    #[error("Font rendering failed: {0}")]
+    RenderFailed(String),
+    
+    #[error("Font management failed: {0}")]
+    FontManagementFailed(String),
+    
+    #[error("Invalid font file: {0}")]
+    InvalidFont(String),
+    
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
+    
+    #[error("Python error: {0}")]
+    PythonError(String),
+}
+
+/// Result type for testypf operations
+pub type TestypfResult<T> = Result<T, TestypfError>;
+
+/// Font information for GUI display
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FontInfo {
+    /// File path to the font
+    pub path: PathBuf,
+    
+    /// PostScript name
+    pub postscript_name: String,
+    
+    /// Full display name
+    pub full_name: String,
+    
+    /// Font family name
+    pub family_name: String,
+    
+    /// Font style
+    pub style: String,
+    
+    /// Whether font is installed
+    pub is_installed: bool,
+}
+
+/// Render settings for text rendering
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RenderSettings {
+    /// Sample text to render
+    pub sample_text: String,
+    
+    /// Font size in points
+    pub font_size: f32,
+    
+    /// Foreground color (RGBA)
+    pub foreground_color: (u8, u8, u8, u8),
+    
+    /// Background color (RGBA), None for transparent
+    pub background_color: Option<(u8, u8, u8, u8)>,
+    
+    /// Renderer backend to use
+    pub backend: RendererBackend,
+    
+    /// Render padding
+    pub padding: u32,
+}
+
+/// Available rendering backends
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum RendererBackend {
+    Orge,
+    Json,
+    #[cfg(target_os = "macos")]
+    CoreGraphics,
+    #[cfg(feature = "render-skia")]
+    Skia,
+    #[cfg(feature = "render-zeno")]
+    Zeno,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self {
+            sample_text: "The quick brown fox jumps over the lazy dog".to_string(),
+            font_size: 16.0,
+            foreground_color: (0, 0, 0, 255),
+            background_color: None,
+            backend: RendererBackend::Orge,
+            padding: 10,
+        }
+    }
+}
+
+/// Render result containing bitmap data
+#[derive(Debug, Clone)]
+pub struct RenderResult {
+    /// Image width in pixels
+    pub width: u32,
+    
+    /// Image height in pixels
+    pub height: u32,
+    
+    /// RGBA pixel data
+    pub data: Vec<u8>,
+    
+    /// Format description
+    pub format: String,
+}
+
+/// Font manager interface
+pub trait FontManager: Send + Sync {
+    /// Add a font to the font list
+    fn add_font(&mut self, path: &PathBuf) -> TestypfResult<FontInfo>;
+    
+    /// Remove a font from the font list
+    fn remove_font(&mut self, path: &PathBuf) -> TestypfResult<()>;
+    
+    /// Get all fonts
+    fn get_fonts(&self) -> TestypfResult<Vec<FontInfo>>;
+    
+    /// Install font using fontlift
+    fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()>;
+    
+    /// Uninstall font using fontlift
+    fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()>;
+}
+
+/// Text renderer interface
+pub trait TextRenderer: Send + Sync {
+    /// Render text with given font and settings
+    fn render_text(&self, font_path: &PathBuf, settings: &RenderSettings) -> TestypfResult<RenderResult>;
+    
+    /// Get available backends
+    fn get_backends(&self) -> Vec<RendererBackend>;
+    
+    /// Set backend
+    fn set_backend(&mut self, backend: RendererBackend) -> TestypfResult<()>;
+}
+
+/// Main testypf engine
+pub struct TestypfEngine {
+    font_manager: Box<dyn FontManager>,
+    text_renderer: Box<dyn TextRenderer>,
+}
+
+impl TestypfEngine {
+    /// Create a new testypf engine
+    pub fn new() -> TestypfResult<Self> {
+        let font_manager = Box::new(crate::font::FontListManager::new());
+        let text_renderer = Box::new(crate::render::TypfRenderer::new()?);
+        
+        Ok(Self {
+            font_manager,
+            text_renderer,
+        })
+    }
+    
+    /// Get font manager
+    pub fn font_manager(&mut self) -> &mut dyn FontManager {
+        &mut *self.font_manager
+    }
+    
+    /// Get text renderer
+    pub fn text_renderer(&mut self) -> &mut dyn TextRenderer {
+        &mut *self.text_renderer
+    }
+    
+    /// Render preview for multiple fonts
+    pub fn render_previews(&mut self, settings: &RenderSettings) -> TestypfResult<Vec<(FontInfo, RenderResult)>> {
+        let fonts = self.font_manager.get_fonts()?;
+        let mut results = Vec::new();
+        
+        for font in fonts {
+            let render_result = self.text_renderer.render_text(&font.path, settings)?;
+            results.push((font, render_result));
+        }
+        
+        Ok(results)
+    }
+}
+
+/// Font management module
+pub mod font {
+    use super::*;
+    
+    /// Font list manager that tracks fonts for the GUI
+    pub struct FontListManager {
+        fonts: Vec<FontInfo>,
+    }
+    
+    impl FontListManager {
+        /// Create a new font list manager
+        pub fn new() -> Self {
+            Self {
+                fonts: Vec::new(),
+            }
+        }
+        
+        /// Extract font information from file
+        fn extract_font_info(&self, path: &PathBuf) -> TestypfResult<FontInfo> {
+            // This is a simplified implementation
+            // In a full implementation, we would use typf/fontlift to extract real font info
+            let file_name = path.file_stem()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Unknown")
+                .to_string();
+            
+            Ok(FontInfo {
+                path: path.clone(),
+                postscript_name: file_name.clone(),
+                full_name: file_name.clone(),
+                family_name: file_name,
+                style: "Regular".to_string(),
+                is_installed: false,
+            })
+        }
+    }
+    
+    impl super::FontManager for FontListManager {
+        fn add_font(&mut self, path: &PathBuf) -> TestypfResult<FontInfo> {
+            let font_info = self.extract_font_info(path)?;
+            
+            // Check if font already exists
+            if self.fonts.iter().any(|f| f.path == *path) {
+                return Err(TestypfError::InvalidFont("Font already added".to_string()));
+            }
+            
+            self.fonts.push(font_info.clone());
+            Ok(font_info)
+        }
+        
+        fn remove_font(&mut self, path: &PathBuf) -> TestypfResult<()> {
+            self.fonts.retain(|f| f.path != *path);
+            Ok(())
+        }
+        
+        fn get_fonts(&self) -> TestypfResult<Vec<FontInfo>> {
+            Ok(self.fonts.clone())
+        }
+        
+        fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
+            // For now, just mark as installed
+            // TODO: Implement real fontlift integration
+            if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+                self.fonts[index].is_installed = true;
+            } else {
+                return Err(TestypfError::FontManagementFailed("Font not found in list".to_string()));
+            }
+            
+            Ok(())
+        }
+        
+        fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
+            // For now, just mark as not installed
+            // TODO: Implement real fontlift integration
+            if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+                self.fonts[index].is_installed = false;
+            } else {
+                return Err(TestypfError::FontManagementFailed("Font not found in list".to_string()));
+            }
+            
+            Ok(())
+        }
+    }
+}
+
+/// Text rendering module
+pub mod render {
+    use super::*;
+    
+    /// Typf-based text renderer
+    pub struct TypfRenderer {
+        backend: RendererBackend,
+    }
+    
+    impl TypfRenderer {
+        /// Create a new typf renderer
+        pub fn new() -> TestypfResult<Self> {
+            Ok(Self {
+                backend: RendererBackend::Orge,
+            })
+        }
+    }
+    
+    impl TextRenderer for TypfRenderer {
+        fn render_text(&self, _font_path: &PathBuf, settings: &RenderSettings) -> TestypfResult<RenderResult> {
+            // For MVP, use improved dummy renderer
+            // TODO: Add real Typf integration in phase 2
+            eprintln!("Info: Rendering with dummy renderer (Typf integration planned)");
+            Ok(self.improved_dummy_render(settings))
+        }
+        
+        fn get_backends(&self) -> Vec<RendererBackend> {
+            vec![
+                RendererBackend::Orge,
+                RendererBackend::Json,
+                #[cfg(target_os = "macos")]
+                RendererBackend::CoreGraphics,
+                #[cfg(feature = "render-skia")]
+                RendererBackend::Skia,
+                #[cfg(feature = "render-zeno")]
+                RendererBackend::Zeno,
+            ]
+        }
+        
+        fn set_backend(&mut self, backend: RendererBackend) -> TestypfResult<()> {
+            self.backend = backend;
+            Ok(())
+        }
+    }
+    
+    impl TypfRenderer {
+        /// Try to render using typf Python bindings
+        fn render_with_typf(&self, font_path: &PathBuf, settings: &RenderSettings) -> TestypfResult<RenderResult> {
+            use pyo3::{Python, PyResult, types::{PyDict, PyAnyMethods}};
+            
+            // Initialize Python
+            pyo3::prepare_freethreaded_python();
+            
+            Python::with_gil(|py| -> TestypfResult<RenderResult> {
+                // Import typf
+                let typf_module = py.import_bound("typf")
+                    .map_err(|e| TestypfError::PythonError(format!("Failed to import typf: {}", e)))?;
+                
+                // Create typf instance
+                let backend_str = self.backend_to_string();
+                let typf_instance = typf_module.call_method("Typf", ("harfbuzz", backend_str), None)
+                    .map_err(|e| TestypfError::PythonError(format!("Failed to create typf instance: {}", e)))?;
+                
+                // Call render_text
+                let result = typf_instance.call_method(py, "render_text", (
+                    &settings.sample_text,
+                    font_path.to_string_lossy().as_ref(),
+                    settings.font_size,
+                    Some(settings.foreground_color),
+                    settings.background_color,
+                    settings.padding,
+                ), None).map_err(|e| TestypfError::PythonError(format!("Typf render failed: {}", e)))?;
+                
+                // Extract result
+                let dict = result.downcast_bound::<PyDict>(py)
+                    .map_err(|_| TestypfError::PythonError("Invalid render result format".to_string()))?;
+                
+                let width: u32 = dict.get_item("width")?
+                    .ok_or_else(|| TestypfError::PythonError("Missing width in result".to_string()))?
+                    .extract()
+                    .map_err(|e| TestypfError::PythonError(format!("Invalid width: {}", e)))?;
+                
+                let height: u32 = dict.get_item("height")?
+                    .ok_or_else(|| TestypfError::PythonError("Missing height in result".to_string()))?
+                    .extract()
+                    .map_err(|e| TestypfError::PythonError(format!("Invalid height: {}", e)))?;
+                
+                let format: String = dict.get_item("format")?
+                    .ok_or_else(|| TestypfError::PythonError("Missing format in result".to_string()))?
+                    .extract()
+                    .map_err(|e| TestypfError::PythonError(format!("Invalid format: {}", e)))?;
+                
+                let data: Vec<u8> = dict.get_item("data")?
+                    .ok_or_else(|| TestypfError::PythonError("Missing data in result".to_string()))?
+                    .extract()
+                    .map_err(|e| TestypfError::PythonError(format!("Invalid pixel data: {}", e)))?;
+                
+                Ok(RenderResult {
+                    width,
+                    height,
+                    data,
+                    format,
+                })
+            })
+        }
+        
+        /// Convert backend enum to string
+        fn backend_to_string(&self) -> &'static str {
+            match &self.backend {
+                RendererBackend::Orge => "orge",
+                RendererBackend::Json => "json",
+                #[cfg(target_os = "macos")]
+                RendererBackend::CoreGraphics => "coregraphics",
+                #[cfg(feature = "render-skia")]
+                RendererBackend::Skia => "skia",
+                #[cfg(feature = "render-zeno")]
+                RendererBackend::Zeno => "zeno",
+            }
+        }
+        
+        /// Fallback dummy renderer
+        fn dummy_render(&self) -> RenderResult {
+            let width = 200;
+            let height = 50;
+            let data = vec![0u8; (width * height * 4) as usize]; // RGBA
+            RenderResult {
+                width,
+                height,
+                data,
+                format: "RGBA8".to_string(),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+        
+        /// Improved dummy renderer that creates visible output
+        fn improved_dummy_render(&self, settings: &RenderSettings) -> RenderResult {
+            // Create a simple pattern based on text length and settings
+            let text_len = settings.sample_text.len() as u32;
+            let width = (text_len * (settings.font_size as u32) / 2).max(100);
+            let height = (settings.font_size as u32 * 2).max(50);
+            
+            let mut data = vec![255u8; (width * height * 4) as usize]; // Start with white background
+            
+            // Create a simple pattern to represent text
+            let fg = settings.foreground_color;
+            for y in 0..height {
+                for x in 0..width {
+                    let idx = ((y * width + x) * 4) as usize;
+                    
+                    // Create a simple "text" pattern (alternating pixels for demo)
+                    if y > height / 4 && y < height * 3 / 4 && x % 4 != 0 {
+                        data[idx] = fg.0;     // R
+                        data[idx + 1] = fg.1; // G
+                        data[idx + 2] = fg.2; // B
+                        data[idx + 3] = fg.3; // A
+                    }
+                }
+            }
+            
+            RenderResult {
+                width,
+                height,
+                data,
+                format: "RGBA8".to_string(),
+            }
+        }
+    use super::*;
+    
+    #[test]
+    fn test_render_settings_default() {
+        let settings = RenderSettings::default();
+        assert_eq!(settings.sample_text, "The quick brown fox jumps over the lazy dog");
+        assert_eq!(settings.font_size, 16.0);
+        assert_eq!(settings.foreground_color, (0, 0, 0, 255));
+    }
+}
