@@ -3792,6 +3792,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "skrifa"
+version = "0.39.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c9eb0b904a04d09bd68c65d946617b8ff733009999050f3b851c32fb3cfb60e"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.36.0",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3965,7 +3975,7 @@ version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbd59f3f359ddd2c95af4758c18270eddd9c730dde98598023cdabff472c2ca2"
 dependencies = [
- "skrifa",
+ "skrifa 0.22.3",
  "yazi",
  "zeno",
 ]
@@ -4051,12 +4061,14 @@ dependencies = [
  "log",
  "pyo3",
  "read-fonts 0.36.0",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
  "tokio-test",
+ "typg-core",
 ]
 
 [[package]]
@@ -4068,6 +4080,7 @@ dependencies = [
  "iced",
  "image 0.25.9",
  "log",
+ "pyo3",
  "read-fonts 0.36.0",
  "rfd",
  "serde",
@@ -4343,6 +4356,19 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "typg-core"
+version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "read-fonts 0.36.0",
+ "regex",
+ "serde",
+ "serde_json",
+ "skrifa 0.39.0",
+ "walkdir",
+]
 
 [[package]]
 name = "uds_windows"

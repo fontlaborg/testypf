@@ -180,7 +180,7 @@ cargo build --features "render-zeno"
 cargo build --features "render-skia,render-zeno"
 
 # Override typf feature flags used by build.sh
-TYPF_FEATURES="shaping-hb,render-orge,render-skia" ./build.sh --verify
+TYPF_FEATURES="shaping-hb,render-opixa,render-skia" ./build.sh --verify
 ```
 
 ## Examples

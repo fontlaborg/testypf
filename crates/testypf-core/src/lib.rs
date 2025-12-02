@@ -1,12 +1,16 @@
 //! testypf-core - Core library for testypf GUI application
 //!
 //! This library provides the core functionality for the testypf GUI,
-//! including integration with typf for rendering and fontlift for font management.
+//! including integration with typf for rendering, fontlift for font management,
+//! and typg for font discovery.
 
 use std::path::PathBuf;
 use thiserror::Error;
 
 pub use fontlift_core::FontScope;
+
+// Re-export discovery types for GUI use
+pub use discovery::{DiscoveryManager, FontDiscoveryResult, SearchCriteria};
 
 /// Core errors for testypf
 #[derive(Error, Debug)]
@@ -22,10 +26,32 @@ pub enum TestypfError {
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+
+    #[error("Font discovery failed: {0}")]
+    DiscoveryFailed(String),
 }
 
 /// Result type for testypf operations
 pub type TestypfResult<T> = Result<T, TestypfError>;
+
+/// Variable font axis information
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct VariationAxis {
+    /// Four-character axis tag (e.g., "wght", "wdth", "ital")
+    pub tag: String,
+
+    /// Human-readable axis name
+    pub name: String,
+
+    /// Minimum value
+    pub min_value: f32,
+
+    /// Default value
+    pub default_value: f32,
+
+    /// Maximum value
+    pub max_value: f32,
+}
 
 /// Font information for GUI display
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -47,6 +73,9 @@ pub struct FontInfo {
 
     /// Whether font is installed
     pub is_installed: bool,
+
+    /// Variable font axes (empty if not a variable font)
+    pub variation_axes: Vec<VariationAxis>,
 }
 
 /// Render settings for text rendering
@@ -69,6 +98,10 @@ pub struct RenderSettings {
 
     /// Render padding
     pub padding: u32,
+
+    /// Variable font axis coordinates (tag -> value)
+    #[serde(default)]
+    pub variation_coords: std::collections::HashMap<String, f32>,
 }
 
 /// Available rendering backends
@@ -108,6 +141,7 @@ impl Default for RenderSettings {
             background_color: None,
             backend: RendererBackend::Orge,
             padding: 10,
+            variation_coords: std::collections::HashMap::new(),
         }
     }
 }
@@ -234,7 +268,7 @@ impl TestypfEngine {
 /// Font management module
 pub mod font {
     use super::*;
-    use read_fonts::FontRef;
+    use read_fonts::{FontRef, TableProvider};
     use std::sync::Arc;
 
     /// Font list manager that tracks fonts for the GUI
@@ -273,8 +307,11 @@ pub mod font {
                 TestypfError::InvalidFont(format!("Failed to read font file: {}", e))
             })?;
 
-            let _font = FontRef::from_index(&font_data, 0)
+            let font = FontRef::from_index(&font_data, 0)
                 .map_err(|e| TestypfError::InvalidFont(format!("Failed to parse font: {}", e)))?;
+
+            // Extract variable font axes from fvar table if present
+            let variation_axes = Self::extract_variation_axes(&font);
 
             // For now, use filename-based extraction since FontLift validation already confirmed it's a valid font
             // The font parsing and name table extraction can be improved later
@@ -295,6 +332,7 @@ pub mod font {
                 family_name,
                 style,
                 is_installed: false,
+                variation_axes,
             };
 
             // Check if font is already installed using FontLift
@@ -311,6 +349,44 @@ pub mod font {
             }
 
             Ok(font_info)
+        }
+
+        /// Extract variation axes from font's fvar table
+        fn extract_variation_axes(font: &FontRef) -> Vec<VariationAxis> {
+            let fvar = match font.fvar() {
+                Ok(fvar) => fvar,
+                Err(_) => return Vec::new(), // Not a variable font
+            };
+
+            let axes = match fvar.axes() {
+                Ok(axes) => axes,
+                Err(_) => return Vec::new(),
+            };
+
+            axes.iter()
+                .map(|axis| {
+                    let tag_bytes = axis.axis_tag().to_be_bytes();
+                    let tag = String::from_utf8_lossy(&tag_bytes).to_string();
+
+                    // Use tag as name for now; could look up in name table
+                    let name = match tag.as_str() {
+                        "wght" => "Weight".to_string(),
+                        "wdth" => "Width".to_string(),
+                        "ital" => "Italic".to_string(),
+                        "slnt" => "Slant".to_string(),
+                        "opsz" => "Optical Size".to_string(),
+                        _ => tag.clone(),
+                    };
+
+                    VariationAxis {
+                        tag,
+                        name,
+                        min_value: axis.min_value().to_f32(),
+                        default_value: axis.default_value().to_f32(),
+                        max_value: axis.max_value().to_f32(),
+                    }
+                })
+                .collect()
         }
 
         #[cfg(test)]
@@ -558,9 +634,9 @@ pub mod render {
 
         if guard.is_none() {
             let typf_module = Python::with_gil(|py| {
-                // Import the typf Python module
-                let typf_module = py.import_bound("typf").map_err(|e| {
-                    TestypfError::RenderFailed(format!("Failed to import typf module: {}", e))
+                // Import the typfpy Python module (typf bindings)
+                let typf_module = py.import_bound("typfpy").map_err(|e| {
+                    TestypfError::RenderFailed(format!("Failed to import typfpy module: {}", e))
                 })?;
 
                 Ok::<PyObject, TestypfError>(typf_module.into())
@@ -766,129 +842,209 @@ pub mod render {
     }
 }
 
-#[cfg(test)]
-mod tests {
+/// Font discovery module using typg
+pub mod discovery {
     use super::*;
-    use crate::font::FontListManager;
-    use std::collections::HashSet;
-    use std::sync::{Arc, Mutex};
+    use typg_core::query::Query;
+    use typg_core::search::{search, FontMatch, SearchOptions};
 
-    #[derive(Default)]
-    struct MockPlatformManager {
-        inner: Mutex<MockInner>,
+    /// Search criteria for font discovery
+    #[derive(Debug, Clone, Default)]
+    pub struct SearchCriteria {
+        /// Name pattern to search for (regex)
+        pub name_pattern: Option<String>,
+        /// Required OpenType features (e.g., "smcp", "liga")
+        pub features: Vec<String>,
+        /// Required OpenType scripts (e.g., "latn", "cyrl")
+        pub scripts: Vec<String>,
+        /// Required font axes (e.g., "wght", "wdth") - variable fonts only
+        pub axes: Vec<String>,
+        /// Only match variable fonts
+        pub variable_only: bool,
+        /// Follow symlinks when scanning directories
+        pub follow_symlinks: bool,
     }
 
-    #[derive(Default)]
-    struct MockInner {
-        installs: Vec<FontScope>,
-        uninstalls: Vec<FontScope>,
-        installed: HashSet<PathBuf>,
+    /// Result from font discovery search
+    #[derive(Debug, Clone)]
+    pub struct FontDiscoveryResult {
+        /// Path to the font file
+        pub path: PathBuf,
+        /// Font names extracted from the file
+        pub names: Vec<String>,
+        /// OpenType feature tags present in the font
+        pub features: Vec<String>,
+        /// OpenType script tags present in the font
+        pub scripts: Vec<String>,
+        /// Whether the font is a variable font
+        pub is_variable: bool,
+        /// TTC index if applicable
+        pub ttc_index: Option<u32>,
     }
 
-    impl fontlift_core::FontManager for MockPlatformManager {
-        fn install_font(
+    impl From<FontMatch> for FontDiscoveryResult {
+        fn from(m: FontMatch) -> Self {
+            Self {
+                path: m.metadata.path,
+                names: m.metadata.names,
+                features: m
+                    .metadata
+                    .feature_tags
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect(),
+                scripts: m
+                    .metadata
+                    .script_tags
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect(),
+                is_variable: m.metadata.is_variable,
+                ttc_index: m.metadata.ttc_index,
+            }
+        }
+    }
+
+    /// Manager for font discovery operations
+    pub struct DiscoveryManager {
+        default_roots: Vec<PathBuf>,
+    }
+
+    impl DiscoveryManager {
+        /// Create a new discovery manager with default system font directories
+        pub fn new() -> Self {
+            let mut roots = Vec::new();
+
+            #[cfg(target_os = "macos")]
+            {
+                // macOS font directories
+                if let Some(home) = std::env::var_os("HOME") {
+                    let user_fonts = PathBuf::from(home).join("Library/Fonts");
+                    if user_fonts.exists() {
+                        roots.push(user_fonts);
+                    }
+                }
+                let system_fonts = PathBuf::from("/Library/Fonts");
+                if system_fonts.exists() {
+                    roots.push(system_fonts);
+                }
+                let system_core_fonts = PathBuf::from("/System/Library/Fonts");
+                if system_core_fonts.exists() {
+                    roots.push(system_core_fonts);
+                }
+            }
+
+            #[cfg(target_os = "windows")]
+            {
+                // Windows font directory
+                if let Some(windir) = std::env::var_os("WINDIR") {
+                    let fonts = PathBuf::from(windir).join("Fonts");
+                    if fonts.exists() {
+                        roots.push(fonts);
+                    }
+                }
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                // Linux font directories
+                let system_fonts = PathBuf::from("/usr/share/fonts");
+                if system_fonts.exists() {
+                    roots.push(system_fonts);
+                }
+                let local_fonts = PathBuf::from("/usr/local/share/fonts");
+                if local_fonts.exists() {
+                    roots.push(local_fonts);
+                }
+                if let Some(home) = std::env::var_os("HOME") {
+                    let user_fonts = PathBuf::from(home).join(".local/share/fonts");
+                    if user_fonts.exists() {
+                        roots.push(user_fonts);
+                    }
+                }
+            }
+
+            Self {
+                default_roots: roots,
+            }
+        }
+
+        /// Get default font search roots for the current platform
+        pub fn default_roots(&self) -> &[PathBuf] {
+            &self.default_roots
+        }
+
+        /// Search for fonts matching the given criteria in specific directories
+        pub fn search_in(
             &self,
-            path: &std::path::Path,
-            scope: FontScope,
-        ) -> fontlift_core::FontResult<()> {
-            let mut inner = self.inner.lock().unwrap();
-            inner.installs.push(scope);
-            inner.installed.insert(path.to_path_buf());
-            Ok(())
+            roots: &[PathBuf],
+            criteria: &SearchCriteria,
+        ) -> TestypfResult<Vec<FontDiscoveryResult>> {
+            let query = self.build_query(criteria)?;
+            let opts = SearchOptions {
+                follow_symlinks: criteria.follow_symlinks,
+            };
+
+            let matches = search(roots, &query, &opts)
+                .map_err(|e| TestypfError::DiscoveryFailed(e.to_string()))?;
+
+            Ok(matches.into_iter().map(FontDiscoveryResult::from).collect())
         }
 
-        fn uninstall_font(
+        /// Search for fonts matching the given criteria in default system directories
+        pub fn search_system(
             &self,
-            path: &std::path::Path,
-            scope: FontScope,
-        ) -> fontlift_core::FontResult<()> {
-            let mut inner = self.inner.lock().unwrap();
-            inner.uninstalls.push(scope);
-            inner.installed.remove(path);
-            Ok(())
+            criteria: &SearchCriteria,
+        ) -> TestypfResult<Vec<FontDiscoveryResult>> {
+            self.search_in(&self.default_roots, criteria)
         }
 
-        fn remove_font(
-            &self,
-            path: &std::path::Path,
-            scope: FontScope,
-        ) -> fontlift_core::FontResult<()> {
-            self.uninstall_font(path, scope)?;
-            std::fs::remove_file(path)?;
-            Ok(())
-        }
+        /// Build a typg Query from our SearchCriteria
+        fn build_query(&self, criteria: &SearchCriteria) -> TestypfResult<Query> {
+            use typg_core::query::parse_tag_list;
 
-        fn is_font_installed(&self, path: &std::path::Path) -> fontlift_core::FontResult<bool> {
-            let inner = self.inner.lock().unwrap();
-            Ok(inner.installed.contains(path))
-        }
+            let mut query = Query::new();
 
-        fn list_installed_fonts(&self) -> fontlift_core::FontResult<Vec<fontlift_core::FontInfo>> {
-            Ok(Vec::new())
-        }
+            if !criteria.features.is_empty() {
+                let tags = parse_tag_list(&criteria.features).map_err(|e| {
+                    TestypfError::DiscoveryFailed(format!("Invalid feature: {}", e))
+                })?;
+                query = query.with_features(tags);
+            }
 
-        fn clear_font_caches(&self, _scope: FontScope) -> fontlift_core::FontResult<()> {
-            Ok(())
-        }
-    }
+            if !criteria.scripts.is_empty() {
+                let tags = parse_tag_list(&criteria.scripts)
+                    .map_err(|e| TestypfError::DiscoveryFailed(format!("Invalid script: {}", e)))?;
+                query = query.with_scripts(tags);
+            }
 
-    #[test]
-    fn test_render_settings_default() {
-        let settings = RenderSettings::default();
-        assert_eq!(
-            settings.sample_text,
-            "The quick brown fox jumps over the lazy dog"
-        );
-        assert_eq!(settings.font_size, 16.0);
-        assert_eq!(settings.foreground_color, (0, 0, 0, 255));
-    }
+            if !criteria.axes.is_empty() {
+                let tags = parse_tag_list(&criteria.axes)
+                    .map_err(|e| TestypfError::DiscoveryFailed(format!("Invalid axis: {}", e)))?;
+                query = query.with_axes(tags);
+            }
 
-    fn temp_font_path(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join("testypf_fontlift_tests");
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join(name);
-        let _ = std::fs::write(&path, b"dummy");
-        path
-    }
+            if criteria.variable_only {
+                query = query.require_variable(true);
+            }
 
-    fn sample_font_info(path: PathBuf) -> FontInfo {
-        FontInfo {
-            path,
-            postscript_name: "DummyPS".to_string(),
-            full_name: "Dummy Font".to_string(),
-            family_name: "Dummy".to_string(),
-            style: "Regular".to_string(),
-            is_installed: false,
+            if let Some(ref pattern) = criteria.name_pattern {
+                let re = regex::Regex::new(pattern).map_err(|e| {
+                    TestypfError::DiscoveryFailed(format!("Invalid name pattern: {}", e))
+                })?;
+                query = query.with_name_patterns(vec![re]);
+            }
+
+            Ok(query)
         }
     }
 
-    #[test]
-    fn install_defaults_to_user_scope() {
-        let mock = Arc::new(MockPlatformManager::default());
-        let mut manager = FontListManager::with_platform_override(mock.clone());
-        let font = sample_font_info(temp_font_path("user_scope.ttf"));
-        manager.push_font_for_tests(font.clone());
-
-        manager.install_font(&font).expect("install");
-
-        let inner = mock.inner.lock().unwrap();
-        assert_eq!(inner.installs, vec![FontScope::User]);
-        assert!(inner.installed.contains(&font.path));
-    }
-
-    #[test]
-    fn install_scope_can_be_switched_to_system() {
-        let mock = Arc::new(MockPlatformManager::default());
-        let mut manager = FontListManager::with_platform_override(mock.clone());
-        let font = sample_font_info(temp_font_path("system_scope.ttf"));
-        manager.push_font_for_tests(font.clone());
-
-        manager.set_install_scope(FontScope::System);
-        manager.install_font(&font).expect("install");
-        manager.uninstall_font(&font).expect("uninstall");
-
-        let inner = mock.inner.lock().unwrap();
-        assert_eq!(inner.installs, vec![FontScope::System]);
-        assert_eq!(inner.uninstalls, vec![FontScope::System]);
+    impl Default for DiscoveryManager {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 }
+
+#[cfg(test)]
+mod tests;

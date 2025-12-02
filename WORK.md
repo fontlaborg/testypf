@@ -1,5 +1,165 @@
 # TestYPF Development Work Log
 
+**Current Session:** 2025-12-01 (GUI module refactoring)
+**Focus:** Split monolithic main.rs into healthy-sized modules
+**Status:** Build and all 20 tests passing
+
+## Session Overview
+- Refactored testypf-gui/src/main.rs (2,819 lines, 27,819 tokens) into 11 smaller modules
+- Created modular architecture:
+  - `main.rs` (19 lines) - minimal entry point
+  - `types.rs` (154 lines) - type definitions
+  - `message.rs` (51 lines) - Message enum
+  - `styles.rs` (29 lines) - custom container styles
+  - `helpers.rs` (574 lines) - utility functions
+  - `app.rs` (270 lines) - TestypfApp struct + Application trait
+  - `update.rs` (635 lines) - message handling logic
+  - `view/mod.rs` (17 lines) - view dispatch
+  - `view/main_view.rs` (647 lines) - main window rendering
+  - `view/render_view.rs` (157 lines) - render overlay window
+  - `tests.rs` (422 lines) - all unit tests
+- Removed unused ui/ directory
+- Fixed unused imports and duplicate functions
+- All files now well under Claude's 25,000 token limit
+
+## Tests
+- `cargo build --package testypf-gui` (1 warning about unused Message variants)
+- `cargo test --package testypf-gui` (20 tests pass)
+
+## Follow-ups
+- Variable font axes GUI sliders still pending
+- Consider adding `#[allow(dead_code)]` to Message placeholder variants
+
+---
+
+**Previous Session:** 2025-12-01 (first-run UI clarity + render gating)
+**Focus:** Make empty-state guidance explicit and prevent confused renders
+**Status:** Tests passing (2 typf-dependent tests still ignored)
+
+## Session Overview
+- Added a quick-start card on the main window that spells out the three steps: add fonts (button or drag/drop), pick install scope, then render.
+- Disabled the render action until the app has something to render and added contextual hints for missing fonts, filter-mismatches, or missing selection when scoped renders are on.
+- Simplified the empty preview area copy to echo the render hint so the user sees the next action immediately.
+
+## Tests
+- `cargo test --workspace`
+
+## Follow-ups
+- Consider lifting the unused helper views in `ui/mod.rs` or wiring them to reduce warnings.
+- Decide whether to surface the quick-start card only on first launch (persist a flag in config).
+
+---
+
+**Previous Session:** 2025-12-01 (variable font axes infrastructure)
+**Focus:** Add core infrastructure for variable font axes support
+**Status:** Build and tests passing
+
+## Session Overview
+- Added `VariationAxis` struct with tag, name, min/default/max values.
+- Added `variation_axes` field to `FontInfo` to store axes from fvar table.
+- Added `variation_coords` HashMap to `RenderSettings` for axis values.
+- Implemented `extract_variation_axes()` in FontListManager using read-fonts TableProvider.
+- Maps common axis tags (wght, wdth, ital, slnt, opsz) to human-readable names.
+- All 30 tests pass (2 ignored for runtime typfpy).
+
+## Tests
+- `cargo test --workspace`
+
+## Follow-ups
+- Add GUI sliders for variation axes in control panel.
+- Pass variation_coords to typf render call.
+
+---
+
+**Previous Session:** 2025-12-01 (Python module name fix)
+**Focus:** Fix typfpy module name in core and GUI
+**Status:** Build and tests passing, GUI runs
+
+## Session Overview
+- Fixed Python module import from `typf` to `typfpy` in testypf-core (lib.rs:569).
+- Updated error messages in GUI to reference `typfpy` instead of `typf`.
+- Added pyo3 initialization (`prepare_freethreaded_python()`) to GUI main.rs.
+- GUI now launches without Python initialization panic when PYTHONPATH includes typfpy.
+- All 28 tests pass (2 ignored for runtime typfpy).
+
+## Tests
+- `cargo test --workspace`
+- `PYTHONPATH=...typf/.venv/... ./target/debug/testypf` (runs successfully)
+
+## Follow-ups
+- Wire discovery into GUI with a search input panel.
+- Add variable font axes sliders for VF fonts.
+
+---
+
+**Previous Session:** 2025-12-01 (typg font discovery integration)
+**Focus:** Add typg-core for font discovery
+**Status:** Build and tests passing
+
+## Session Overview
+- Added typg-core as workspace dependency for font discovery functionality.
+- Created `discovery` module in testypf-core with `DiscoveryManager` and `SearchCriteria` types.
+- DiscoveryManager auto-detects platform font directories (macOS, Windows, Linux).
+- SearchCriteria supports filtering by name pattern (regex), OT features, scripts, axes, variable-only.
+- Added unit tests for discovery manager initialization and search criteria defaults.
+- All 28 tests pass (2 ignored for runtime typf).
+
+## Tests
+- `cargo test --workspace`
+
+## Follow-ups
+- Wire discovery into GUI with a search input panel.
+- Add "Import from search results" action to populate font list from discovery.
+
+---
+
+**Previous Session:** 2025-12-01 (build.sh --verify fix)
+**Focus:** Fix typf module name in verification script
+**Status:** Build and verify passing
+
+## Session Overview
+- Fixed `build.sh --verify` to import `typfpy` instead of `typf` (the Python module is named `typfpy-*`).
+- Updated all typf references in verification Python snippets.
+- Build + verify now passes on macOS: `typfpy render OK: 86x26 bytes=8944`
+- All 26 tests pass (2 ignored for missing runtime typf).
+
+## Tests
+- `./build.sh --skip-deps --verify`
+- `cargo test --workspace`
+
+---
+
+**Previous Session:** 2025-12-01 (build script + typf defaults)
+**Focus:** Fix macOS build.sh dependency invocations and typf feature defaults
+**Status:** Build passes with deps (./build.sh --core)
+
+## Session Overview
+- Swapped fontlift dependency call to use supported `--core-only` flag to stop the build from failing before compiling dependencies.
+- Normalized typf Python venv handling to accept `.venv` (uv default) or `venv`, creating the directory explicitly to avoid missing-activate errors.
+- Updated default typf features from deprecated `render-orge` to `render-opixa` and refreshed README/examples docs accordingly.
+
+## Tests
+- `./build.sh --core`
+
+## Follow-ups
+- Consider aligning remaining docs/samples that still mention the Orge label once typf nomenclature fully settles.
+
+# Current Session: 2025-12-01 (error recovery messaging)
+**Focus:** Friendlier install/render failures; actionable guidance
+**Status:** Tests passing
+
+## Session Overview
+- Added helper messaging for install/uninstall failures (permission + platform feature hints) and typf missing module renders.
+- Surfaced the new guidance inside GUI status updates to reduce dead-end errors.
+
+## Tests
+- `cargo test --workspace`
+
+## Follow-ups
+- Consider surfacing FontLift/Typf diagnostic link in status bar when errors repeat.
+
+---
+
 **Current Session:** 2025-12-01 (hotkeys + filtered rendering scope)  
 **Focus:** Keyboard shortcuts and scoped rendering for large font sets  
 **Status:** Tests passing (typf-dependent GUI tests still ignored)

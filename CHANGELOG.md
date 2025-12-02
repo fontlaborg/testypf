@@ -1,6 +1,25 @@
 # Changelog
 
-## 2025-12-01
+## v1.0.5 (2025-12-01)
+- Added a first-run quick-start card (steps to add fonts, pick install scope, render) and simplified empty preview copy for clearer onboarding.
+- Render action now disables itself until there is at least one renderable font, with hints when filters or selection state block rendering.
+
+## v1.0.4 (2025-12-01)
+- Fixed Python module import to use `typfpy` instead of `typf` in testypf-core for GUI runtime.
+- Added pyo3 `prepare_freethreaded_python()` initialization at GUI startup.
+- Updated error messages and tests to reference correct `typfpy` module name.
+
+## v1.0.3 (2025-12-01)
+- Added typg-core integration for font discovery via new `DiscoveryManager` and `SearchCriteria` APIs.
+- DiscoveryManager auto-detects platform font directories (macOS/Windows/Linux).
+- SearchCriteria supports name pattern (regex), OpenType features/scripts/axes, and variable-only filtering.
+
+## v1.0.2 (2025-12-01)
+- Fixed `build.sh --verify` to use correct module name `typfpy` instead of `typf`.
+
+## v1.0.1 (2025-12-01)
+- GUI now surfaces friendlier error guidance for font installs/uninstalls (permissions, platform features) and typf render failures (PYTHONPATH/build.sh hints); added unit tests for the messaging helpers.
+- build.sh now calls the fontlift builder with the supported `--core-only` flag, respects `.venv` or `venv` for typf bindings, and defaults typf feature flags to `render-opixa` (docs/examples updated accordingly).
 - Added command/ctrl shortcuts for add fonts, render, export PNGs, and opening the render window, with in-app shortcut hints.
 - Added font list filter and a render-selected-only toggle so renders can be scoped to visible fonts or the active selection for large font sets; previews respect the filter while still showing the scoped selection.
 - Added font metadata panel with per-font "Details" toggle showing name/family/style, PostScript name, install state, path, and file size.

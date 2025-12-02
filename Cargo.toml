@@ -19,6 +19,7 @@ iced = { version = "0.12", features = ["image", "multi-window"] }
 
 # Core dependencies
 typf-py = { path = "../typf/bindings/python" }
+typg-core = { path = "../typg/typg-core" }
 fontlift-core = { path = "../fontlift/crates/fontlift-core" }
 fontlift-cli = { path = "../fontlift/crates/fontlift-cli" }
 fontlift-platform-mac = { path = "../fontlift/crates/fontlift-platform-mac" }

@@ -147,7 +147,7 @@ SKIP_DEPS="no"
 RUN_VERIFY="no"
 RUN_DIAGNOSE="no"
 RUN_FRESH_CHECK="no"
-TYPF_FEATURES_DEFAULT="shaping-hb,render-orge"
+TYPF_FEATURES_DEFAULT="shaping-hb,render-opixa"
 VERIFY_FONT_CANDIDATES=(
     "${TYPF_VERIFY_FONT:-}"
     "/System/Library/Fonts/Supplemental/Arial.ttf"
@@ -276,7 +276,7 @@ if [ "$SKIP_DEPS" = "no" ]; then
 
 	print_status "Building fontlift..."
 	pushd ../fontlift >/dev/null
-	./build.sh --core $BUILD_FLAGS
+	./build.sh --core-only $BUILD_FLAGS
 	popd >/dev/null
 
 	# Check and build typf Python bindings
@@ -285,14 +285,24 @@ if [ "$SKIP_DEPS" = "no" ]; then
 	print_status "Building typf Python bindings..."
 	pushd ../typf/bindings/python >/dev/null
 
-	# Create Python environment if it doesn't exist
-	if [ ! -d "venv" ]; then
-		print_status "Creating Python virtual environment..."
-		UV_PYTHON=python3 uv venv
+	# Create Python environment if it doesn't exist (prefer .venv if present)
+	TYPF_VENV_DIR="venv"
+	if [ -d ".venv" ]; then
+		TYPF_VENV_DIR=".venv"
+	fi
+
+	if [ ! -d "$TYPF_VENV_DIR" ]; then
+		print_status "Creating Python virtual environment at $TYPF_VENV_DIR..."
+		UV_PYTHON=python3 uv venv "$TYPF_VENV_DIR"
+	fi
+
+	if [ ! -d "$TYPF_VENV_DIR" ]; then
+		print_error "Failed to create typf virtualenv at $TYPF_VENV_DIR"
+		exit 1
 	fi
 
 	# Activate environment and install dependencies
-	source venv/bin/activate
+	source "$TYPF_VENV_DIR/bin/activate"
 	uv pip install maturin -q
 	uv pip install -e . -q
 
@@ -370,11 +380,16 @@ if [ "$RUN_VERIFY" = "yes" ]; then
 		return 1
 	}
 
-	if [ -d "../typf/bindings/python/venv/bin" ]; then
-		print_status "Checking typf Python module import..."
-		if ! ../typf/bindings/python/venv/bin/python - <<'PY'
-import typf
-print("typf import OK, version:", getattr(typf, "__version__", "unknown"))
+	TYPF_VENV_DIR="venv"
+	if [ -d "../typf/bindings/python/.venv/bin" ]; then
+		TYPF_VENV_DIR=".venv"
+	fi
+
+	if [ -d "../typf/bindings/python/$TYPF_VENV_DIR/bin" ]; then
+		print_status "Checking typfpy Python module import..."
+		if ! "../typf/bindings/python/$TYPF_VENV_DIR/bin/python" - <<'PY'
+import typfpy
+print("typfpy import OK, version:", getattr(typfpy, "__version__", "unknown"))
 PY
 		then
 			print_error "typf Python module failed to import from venv."
@@ -385,13 +400,13 @@ PY
 		if [ -z "$VERIFY_FONT" ]; then
 			print_warning "No test font located. Set TYPF_VERIFY_FONT to an installed font path (e.g. /System/Library/Fonts/Supplemental/Arial.ttf)."
 		else
-			print_status "Exercising typf render_text with $VERIFY_FONT"
-			if ! VERIFY_FONT="$VERIFY_FONT" ../typf/bindings/python/venv/bin/python - <<'PY'
+			print_status "Exercising typfpy render_text with $VERIFY_FONT"
+			if ! VERIFY_FONT="$VERIFY_FONT" "../typf/bindings/python/$TYPF_VENV_DIR/bin/python" - <<'PY'
 import os
-import typf
+import typfpy
 
 font_path = os.environ["VERIFY_FONT"]
-engine = typf.Typf("harfbuzz", "opixa")
+engine = typfpy.Typf("harfbuzz", "opixa")
 result = engine.render_text(
     "typf verify",
     font_path,
@@ -402,16 +417,16 @@ result = engine.render_text(
 )
 
 if not isinstance(result, dict):
-    raise SystemExit("Unexpected typf render result; expected dict")
+    raise SystemExit("Unexpected typfpy render result; expected dict")
 
 width = result.get("width")
 height = result.get("height")
 data = result.get("data")
 
 if not width or not height or not data:
-    raise SystemExit("typf render returned empty output")
+    raise SystemExit("typfpy render returned empty output")
 
-print(f"typf render OK: {width}x{height} bytes={len(data)}")
+print(f"typfpy render OK: {width}x{height} bytes={len(data)}")
 PY
 			then
 				print_error "typf render test failed (see output above)."

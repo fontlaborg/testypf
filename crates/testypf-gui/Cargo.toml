@@ -26,6 +26,8 @@ serde.workspace = true
 serde_json.workspace = true
 # Core dependencies
 testypf-core = { path = "../testypf-core", default-features = false }
+# Python integration for typf
+pyo3.workspace = true
 # External dependencies
 thiserror.workspace = true
 tokio.workspace = true

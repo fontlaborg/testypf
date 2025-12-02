@@ -23,6 +23,9 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# Font discovery
+typg-core = { workspace = true }
+regex = "1.11"
 
 [features]
 default = []

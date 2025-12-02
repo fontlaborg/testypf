@@ -1,5 +1,7 @@
 # TestYPF TODO
 
+- [x] Integrate @./linked/typg for font finding (DiscoveryManager + SearchCriteria API in testypf-core)
+
 **Scope:** Build `testypf`, a minimal-yet-fast cross-platform GUI app showcasing typf rendering, typg discovery, and fontlift install flows.
 
 **Current Status:** MVP Critical Path - Core functionality exists but needs essential visual and integration improvements for a working product.
@@ -62,7 +64,7 @@
 - [x] **Multi-Window Architecture**: Separate floating panels for font list, controls, render window
 - [x] **Transparent Render Window**: Borderless window with transparency support for overlay testing
 - [x] **Color Picker Controls**: Foreground/background color selection with transparency
-- [ ] **Variable Font Axes**: Dynamic sliders for font variation axes when VF fonts are loaded
+- [~] **Variable Font Axes**: Dynamic sliders for font variation axes when VF fonts are loaded (core: VariationAxis, fvar extraction done; GUI sliders pending)
 - [x] **Export Functionality**: Save rendered previews as PNGs via in-app export action
 
 ### Phase 3 - Advanced Integration
@@ -78,6 +80,7 @@
 - [ ] **Documentation完善**: Screenshots, examples, troubleshooting guide
 - [x] **Keyboard Shortcuts**: Power user keyboard navigation
 - [ ] **Error Recovery**: Better error messages and recovery suggestions
+ - [x] **Error Recovery**: Better error messages and recovery suggestions (permission hints, platform-feature guidance, typf/PYTHONPATH remediation)
 
 ---
 
@@ -119,7 +122,7 @@
 ### Integration Points Status
 - **Typf**: ✅ Full integration working - generates real render results
 - **FontLift**: 🚧 Real APIs wired; requires platform feature enablement and validation
-- **Typg**: Not yet started (planned for post-MVP phase)
+- **Typg**: ✅ Core integration complete - DiscoveryManager + SearchCriteria API ready; GUI search panel pending
 
 ---
 

@@ -22,19 +22,18 @@ testypf/
 │   │   └── Cargo.toml
 │   └── testypf-gui/            # Iced GUI application
 │       ├── src/
-│       │   ├── main.rs         # Application entry point
-│       │   ├── app.rs          # Main application state
-│       │   ├── ui/
-│       │   │   ├── mod.rs
-│       │   │   ├── font_list.rs    # Font list panel
-│       │   │   ├── controls.rs     # Control panel
-│       │   │   ├── render_view.rs  # Render window
-│       │   │   └── components.rs   # Shared UI components
-│       │   └── windows/
-│       │       ├── mod.rs
-│       │       ├── font_list_window.rs
-│       │       ├── control_window.rs
-│       │       └── render_window.rs
+│       │   ├── main.rs         # Minimal entry point
+│       │   ├── app.rs          # TestypfApp struct + Application trait
+│       │   ├── types.rs        # Type definitions (InstallScope, LayoutMode, etc.)
+│       │   ├── message.rs      # Message enum for event handling
+│       │   ├── helpers.rs      # Utility functions (rendering, config, formatting)
+│       │   ├── update.rs       # Message handling logic
+│       │   ├── styles.rs       # Custom container styles
+│       │   ├── view/
+│       │   │   ├── mod.rs          # View dispatch
+│       │   │   ├── main_view.rs    # Main window rendering
+│       │   │   └── render_view.rs  # Transparent overlay window
+│       │   └── tests.rs        # Unit tests
 │       └── Cargo.toml
 ├── examples/                   # Usage examples
 ├── tests/                      # Integration tests
