@@ -364,7 +364,7 @@ impl FontListWindow {
 **Duration**: Typf integration
 
 **Core Tasks**:
-- [ ] Complete typf rendering pipeline integration
+- [x] Complete typf rendering pipeline integration
 - [x] Implement backend selection and switching
 - [x] Add side-by-side rendering comparison
 - [x] Implement render result caching

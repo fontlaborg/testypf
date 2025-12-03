@@ -217,6 +217,7 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
                     || app.selected_font.map(|i| i > index).unwrap_or(false)
                 {
                     app.selected_font = None;
+                    app.render_settings.variation_coords.clear();
                 }
                 app.status = "Font removed".to_string();
                 app.invalidate_render_cache();
@@ -228,11 +229,37 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
             if index < app.fonts.len() {
                 if app.selected_font == Some(index) {
                     app.selected_font = None;
-                    app.status = "Font details hidden".to_string();
+                    app.render_settings.variation_coords.clear();
+                    app.status = "Font details hidden; variations reset".to_string();
+                    app.invalidate_render_cache();
                 } else {
                     app.selected_font = Some(index);
+                    helpers::sync_variations_for_axes(
+                        &mut app.render_settings,
+                        &app.fonts[index].variation_axes,
+                    );
+                    app.invalidate_render_cache();
                     app.status = format!("Showing details for {}", app.fonts[index].full_name);
                 }
+            }
+        }
+
+        Message::VariationAxisChanged(tag, value) => {
+            if let Some(selected) = app.selected_font {
+                if let Some(font) = app.fonts.get(selected) {
+                    if let Some(axis) = font.variation_axes.iter().find(|a| a.tag == tag) {
+                        let clamped = helpers::clamp_variation_value(value, axis);
+                        app.render_settings
+                            .variation_coords
+                            .insert(tag.clone(), clamped);
+                        app.status = format!("{} set to {:.1}", axis.name, clamped);
+                        app.invalidate_render_cache();
+                    } else {
+                        app.status = format!("Axis {} not found for selected font", tag);
+                    }
+                }
+            } else {
+                app.status = "Select a variable font to adjust axes".to_string();
             }
         }
 

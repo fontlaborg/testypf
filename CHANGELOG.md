@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.6 (2025-12-03)
+- Added variable font axis sliders in the GUI metadata panel with default seeding, clamping, and live status updates.
+- Render settings now carry variation coordinates into typfpy; Python bindings accept a `variations` argument and testypf-core forwards HashMap values to Typf.
+- Preview metadata shows applied variations and new helpers keep variation maps in sync with selected fonts (unit tests cover summaries/clamping).
+
 ## v1.0.5 (2025-12-01)
 - Added a first-run quick-start card (steps to add fonts, pick install scope, render) and simplified empty preview copy for clearer onboarding.
 - Render action now disables itself until there is at least one renderable font, with hints when filters or selection state block rendering.

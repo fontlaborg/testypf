@@ -27,6 +27,7 @@ pub enum Message {
     ForegroundChanged(String),
     BackgroundChanged(String),
     BackgroundToggled(bool),
+    VariationAxisChanged(String, f32),
     LayoutChanged(LayoutMode),
     RenderSelectedOnlyToggled(bool),
     ExportPreviews,

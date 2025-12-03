@@ -645,6 +645,7 @@ pub mod render {
         },
         PyObject, Python,
     };
+    use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
 
     /// Python typf module cache
@@ -735,6 +736,11 @@ pub mod render {
                 let color = Some(settings.foreground_color);
                 let background = settings.background_color;
                 let font_path_str = font_path.to_string_lossy();
+                let variations: HashMap<String, f32> = settings
+                    .variation_coords
+                    .iter()
+                    .map(|(tag, value)| (tag.clone(), *value))
+                    .collect();
 
                 // Call render_text method
                 let result = typf_instance
@@ -748,6 +754,11 @@ pub mod render {
                             color,
                             background,
                             settings.padding,
+                            if variations.is_empty() {
+                                None
+                            } else {
+                                Some(variations)
+                            },
                         ),
                     )
                     .map_err(|e| {

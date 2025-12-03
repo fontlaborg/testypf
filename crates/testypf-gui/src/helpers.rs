@@ -10,7 +10,9 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use testypf_core::{RenderResult, RenderSettings, RendererBackend, TestypfFontInfo};
+use testypf_core::{
+    RenderResult, RenderSettings, RendererBackend, TestypfFontInfo, TestypfVariationAxis,
+};
 
 // =============================================================================
 // Font File Operations
@@ -162,6 +164,49 @@ pub fn font_metadata_lines(font: &TestypfFontInfo, file_size_bytes: Option<u64>)
     lines
 }
 
+// =============================================================================
+// Variable Fonts
+// =============================================================================
+
+/// Clamp a variation coordinate to the axis range.
+pub fn clamp_variation_value(value: f32, axis: &TestypfVariationAxis) -> f32 {
+    value.max(axis.min_value).min(axis.max_value)
+}
+
+/// Align render settings to the provided axes: seed defaults, clamp existing, and drop unknowns.
+pub fn sync_variations_for_axes(settings: &mut RenderSettings, axes: &[TestypfVariationAxis]) {
+    let mut updated = HashMap::new();
+
+    for axis in axes {
+        let current = settings
+            .variation_coords
+            .get(&axis.tag)
+            .copied()
+            .unwrap_or(axis.default_value);
+        let clamped = clamp_variation_value(current, axis);
+        updated.insert(axis.tag.clone(), clamped);
+    }
+
+    settings.variation_coords = updated;
+}
+
+/// Human-readable summary for variation coordinates (sorted by tag).
+pub fn variation_summary(settings: &RenderSettings) -> Option<String> {
+    if settings.variation_coords.is_empty() {
+        return None;
+    }
+
+    let mut pairs: Vec<_> = settings.variation_coords.iter().collect();
+    pairs.sort_by(|a, b| a.0.cmp(b.0));
+
+    let parts: Vec<String> = pairs
+        .into_iter()
+        .map(|(tag, value)| format!("{tag}={value:.1}"))
+        .collect();
+
+    Some(parts.join(", "))
+}
+
 /// Get file size in bytes.
 pub fn font_file_size(path: &Path) -> Option<u64> {
     fs::metadata(path).ok().map(|m| m.len())
@@ -243,15 +288,20 @@ pub fn preview_metadata_text(
     font: &TestypfFontInfo,
     settings: &RenderSettings,
 ) -> String {
+    let variation_text = variation_summary(settings)
+        .map(|s| format!(" | Variations: {}", s))
+        .unwrap_or_default();
+
     format!(
-        "Dimensions: {}x{} | Format: {} | Backend: {} | Style: {} | Family: {} | Render time: {} ms",
+        "Dimensions: {}x{} | Format: {} | Backend: {} | Style: {} | Family: {} | Render time: {} ms{}",
         preview.width,
         preview.height,
         preview.format,
         settings.backend,
         font.style,
         font.family_name,
-        preview.duration_ms
+        preview.duration_ms,
+        variation_text
     )
 }
 

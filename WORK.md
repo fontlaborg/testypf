@@ -1,5 +1,21 @@
 # TestYPF Development Work Log
 
+**Current Session:** 2025-12-03 (variable font axes + typf wiring)  
+**Focus:** Surface variable font controls in GUI and route variation coords into Typf renders  
+**Status:** Tests passing
+
+## Session Overview
+- Added variable font axis panel in the metadata view with sliders for each fvar axis; defaults seed on selection, values clamp to axis ranges, and status updates reflect changes.
+- Synced render settings variation map to the selected font (dropping unknown axes) and reset when deselecting/ removing fonts to avoid stale coordinates.
+- Passed variation coordinates through testypf-core to typfpy; Python bindings now accept a `variations` argument and apply it to both shaping and rendering params.
+- Preview metadata now includes applied variations; helper utilities gained summaries/clamping plus unit tests for variation syncing.
+
+## Tests
+- `cargo fmt --all`
+- `cargo test --workspace`
+
+---
+
 **Current Session:** 2025-12-01 (GUI module refactoring)
 **Focus:** Split monolithic main.rs into healthy-sized modules
 **Status:** Build and all 20 tests passing

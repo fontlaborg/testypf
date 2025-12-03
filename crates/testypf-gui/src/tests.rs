@@ -343,6 +343,106 @@ fn preview_metadata_text_includes_duration_and_backend() {
 }
 
 #[test]
+fn variation_summary_sorts_and_formats_values() {
+    let mut settings = RenderSettings::default();
+    settings.variation_coords.insert("wght".into(), 700.25_f32);
+    settings.variation_coords.insert("opsz".into(), 12.0_f32);
+
+    let summary = helpers::variation_summary(&settings).expect("summary should exist");
+
+    assert_eq!(summary, "opsz=12.0, wght=700.2");
+}
+
+#[test]
+fn sync_variations_resets_to_defaults_and_prunes_unknown_axes() {
+    let axes = vec![
+        testypf_core::TestypfVariationAxis {
+            tag: "wght".into(),
+            name: "Weight".into(),
+            min_value: 100.0,
+            default_value: 400.0,
+            max_value: 900.0,
+        },
+        testypf_core::TestypfVariationAxis {
+            tag: "wdth".into(),
+            name: "Width".into(),
+            min_value: 50.0,
+            default_value: 100.0,
+            max_value: 200.0,
+        },
+    ];
+
+    let mut settings = RenderSettings::default();
+    settings.variation_coords.insert("wght".into(), 1200.0);
+    settings.variation_coords.insert("old".into(), 1.0);
+
+    helpers::sync_variations_for_axes(&mut settings, &axes);
+
+    assert_eq!(
+        settings.variation_coords.get("wght"),
+        Some(&900.0),
+        "existing value should be clamped to axis max"
+    );
+    assert_eq!(
+        settings.variation_coords.get("wdth"),
+        Some(&100.0),
+        "missing axis should be seeded with its default"
+    );
+    assert!(
+        !settings.variation_coords.contains_key("old"),
+        "unknown axes should be dropped"
+    );
+}
+
+#[test]
+fn clamp_variation_value_enforces_bounds() {
+    let axis = testypf_core::TestypfVariationAxis {
+        tag: "TEST".into(),
+        name: "Test".into(),
+        min_value: 10.0,
+        default_value: 50.0,
+        max_value: 100.0,
+    };
+
+    assert_eq!(helpers::clamp_variation_value(-5.0, &axis), 10.0);
+    assert_eq!(helpers::clamp_variation_value(150.0, &axis), 100.0);
+    assert_eq!(helpers::clamp_variation_value(75.5, &axis), 75.5);
+}
+
+#[test]
+fn preview_metadata_includes_variations_when_present() {
+    let font = TestypfFontInfo {
+        source: FontliftFontSource::new(PathBuf::from("demo.ttf")),
+        postscript_name: "DemoPS".into(),
+        full_name: "Demo Font".into(),
+        family_name: "Demo".into(),
+        style: "Regular".into(),
+        is_installed: true,
+        variation_axes: Vec::new(),
+    };
+
+    let preview = RenderPreview {
+        font_index: 0,
+        width: 10,
+        height: 10,
+        format: "Rgba8".to_string(),
+        pixels: vec![255; 10 * 10 * 4],
+        handle: Handle::from_pixels(10, 10, vec![255; 10 * 10 * 4]),
+        duration_ms: 5,
+    };
+
+    let mut settings = RenderSettings::default();
+    settings.variation_coords.insert("wght".into(), 500.0_f32);
+
+    let text = helpers::preview_metadata_text(&preview, &font, &settings);
+
+    assert!(
+        text.contains("Variations: wght=500.0"),
+        "variation summary should appear when set"
+    );
+}
+
+#[test]
 fn font_metadata_lines_include_path_and_install_state() {
     let font = TestypfFontInfo {
         source: FontliftFontSource::new(PathBuf::from("/tmp/metadata/demo.ttf")),

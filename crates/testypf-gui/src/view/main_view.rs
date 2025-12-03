@@ -7,8 +7,8 @@ use crate::styles::DragActiveStyle;
 use crate::types::{InstallScope, LayoutMode, RenderAvailability};
 
 use iced::widget::{
-    button, checkbox, column, container, image as iced_image, pick_list, row, scrollable, text,
-    text_input,
+    button, checkbox, column, container, image as iced_image, pick_list, row, scrollable, slider,
+    text, text_input,
 };
 use iced::{Element, Length};
 
@@ -229,11 +229,20 @@ fn metadata_panel_view(app: &TestypfApp) -> Element<'_, Message> {
             .map(|line| text(line).size(12).into())
             .collect::<Vec<_>>();
 
-        container(column![text("Font Metadata").size(16), column(rows).spacing(4),].spacing(8))
-            .padding(12)
-            .width(Length::Fill)
-            .style(iced::theme::Container::Box)
-            .into()
+        let variation_panel = variation_controls(app, selected);
+
+        container(
+            column![
+                text("Font Metadata").size(16),
+                column(rows).spacing(4),
+                variation_panel
+            ]
+            .spacing(8),
+        )
+        .padding(12)
+        .width(Length::Fill)
+        .style(iced::theme::Container::Box)
+        .into()
     } else {
         container(
             column![
@@ -249,6 +258,83 @@ fn metadata_panel_view(app: &TestypfApp) -> Element<'_, Message> {
         .style(iced::theme::Container::Box)
         .into()
     }
+}
+
+/// Variable font axis controls for the selected font.
+fn variation_controls<'a>(
+    app: &'a TestypfApp,
+    font: &'a testypf_core::TestypfFontInfo,
+) -> Element<'a, Message> {
+    if font.variation_axes.is_empty() {
+        return text("No variable font axes detected for this font.")
+            .size(12)
+            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                0.45, 0.45, 0.45,
+            )))
+            .into();
+    }
+
+    let sliders: Vec<Element<Message>> = font
+        .variation_axes
+        .iter()
+        .map(|axis| {
+            let current = app
+                .render_settings
+                .variation_coords
+                .get(&axis.tag)
+                .copied()
+                .unwrap_or(axis.default_value);
+
+            let label = text(format!("{} ({})", axis.name, axis.tag)).size(12);
+            let bounds = text(format!(
+                "{:.0} – {:.0} (default {:.0})",
+                axis.min_value, axis.max_value, axis.default_value
+            ))
+            .size(10)
+            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                0.45, 0.45, 0.45,
+            )));
+
+            let slider = slider(axis.min_value..=axis.max_value, current, {
+                let tag = axis.tag.clone();
+                move |val| Message::VariationAxisChanged(tag.clone(), val)
+            })
+            .step(1.0);
+
+            column![label, slider, bounds].spacing(4).into()
+        })
+        .collect();
+
+    let summary: Element<Message> = helpers::variation_summary(&app.render_settings)
+        .map(|s| {
+            text(format!("Applied: {}", s))
+                .size(11)
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.3, 0.4, 0.3,
+                )))
+                .into()
+        })
+        .unwrap_or_else(|| {
+            text("Using default axis values")
+                .size(11)
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.45, 0.45, 0.45,
+                )))
+                .into()
+        });
+
+    container(
+        column![
+            text("Variable Font Axes").size(16),
+            column(sliders).spacing(8),
+            summary
+        ]
+        .spacing(8),
+    )
+    .padding(12)
+    .width(Length::Fill)
+    .style(iced::theme::Container::Box)
+    .into()
 }
 
 /// Build the drop area view.

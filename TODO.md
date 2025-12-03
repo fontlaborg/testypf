@@ -64,7 +64,7 @@
 - [x] **Multi-Window Architecture**: Separate floating panels for font list, controls, render window
 - [x] **Transparent Render Window**: Borderless window with transparency support for overlay testing
 - [x] **Color Picker Controls**: Foreground/background color selection with transparency
-- [~] **Variable Font Axes**: Dynamic sliders for font variation axes when VF fonts are loaded (core: TestypfVariationAxis, fvar extraction done; GUI sliders pending)
+- [x] **Variable Font Axes**: Dynamic sliders for variation axes with live Typf wiring (fvar parsed in core; GUI now seeds defaults, clamps ranges, and sends variation coords to renders)
 - [x] **Export Functionality**: Save rendered previews as PNGs via in-app export action
 
 ### Phase 3 - Advanced Integration
