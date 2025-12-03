@@ -172,7 +172,7 @@ struct TestypfApp {
 
 // Each window as separate Iced application
 struct FontListWindow {
-    fonts: Vec<FontInfo>,
+    fonts: Vec<TestypfFontInfo>,
     selected: HashSet<usize>,
 }
 

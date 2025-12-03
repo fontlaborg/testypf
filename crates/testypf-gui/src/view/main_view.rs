@@ -163,16 +163,19 @@ fn font_list_view<'a>(app: &'a TestypfApp, visible_indices: &[usize]) -> Element
                 .iter()
                 .filter_map(|&i| app.fonts.get(i).map(|font| (i, font)))
                 .map(|(i, font)| {
-                    let font_info = text(format!("{} ({})", font.full_name, font.family_name)).size(14);
+                    let font_info =
+                        text(format!("{} ({})", font.full_name, font.family_name)).size(14);
 
                     let install_status = if font.is_installed {
-                        text("Installed")
-                            .size(12)
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.0, 0.5, 0.0)))
+                        text("Installed").size(12).style(iced::theme::Text::Color(
+                            iced::Color::from_rgb(0.0, 0.5, 0.0),
+                        ))
                     } else {
                         text("Not installed")
                             .size(12)
-                            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.2, 0.2)))
+                            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                                0.5, 0.2, 0.2,
+                            )))
                     };
 
                     let mut details_btn = button("Details");
@@ -219,7 +222,7 @@ fn font_list_view<'a>(app: &'a TestypfApp, visible_indices: &[usize]) -> Element
 /// Build the metadata panel view.
 fn metadata_panel_view(app: &TestypfApp) -> Element<'_, Message> {
     if let Some(selected) = app.selected_font.and_then(|i| app.fonts.get(i)) {
-        let file_size = helpers::font_file_size(&selected.path);
+        let file_size = helpers::font_file_size(selected.path());
         let lines = helpers::font_metadata_lines(selected, file_size);
         let rows = lines
             .iter()
@@ -235,9 +238,9 @@ fn metadata_panel_view(app: &TestypfApp) -> Element<'_, Message> {
         container(
             column![
                 text("Font Metadata").size(16),
-                text("Select a font to view its details.")
-                    .size(12)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5,))),
+                text("Select a font to view its details.").size(12).style(
+                    iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5,))
+                ),
             ]
             .spacing(6),
         )
@@ -263,90 +266,107 @@ fn drop_area_view(app: &TestypfApp) -> Element<'_, Message> {
         )
     });
 
-    let drop_area_content = if app.is_dragging {
-        let hover_info = if let Some(ref hovered_file) = app.hovered_file {
-            let file_name = hovered_file
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy();
+    let drop_area_content =
+        if app.is_dragging {
+            let hover_info = if let Some(ref hovered_file) = app.hovered_file {
+                let file_name = hovered_file
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
 
-            if hovered_file.is_dir() {
-                text(format!(
-                    "📂 Folder: {} (Click to scan recursively)",
-                    file_name
-                ))
-                .size(14)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.0, 0.4, 0.8)))
-            } else {
-                text(format!("📄 File: {} (Click to add this font)", file_name))
+                if hovered_file.is_dir() {
+                    text(format!(
+                        "📂 Folder: {} (Click to scan recursively)",
+                        file_name
+                    ))
                     .size(14)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.0, 0.6, 0.0)))
-            }
-        } else {
-            text("🎯 Drop fonts or folders here!")
-                .size(18)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.0, 0.6, 0.0)))
-        };
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.0, 0.4, 0.8,
+                    )))
+                } else {
+                    text(format!("📄 File: {} (Click to add this font)", file_name))
+                        .size(14)
+                        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                            0.0, 0.6, 0.0,
+                        )))
+                }
+            } else {
+                text("🎯 Drop fonts or folders here!")
+                    .size(18)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.0, 0.6, 0.0,
+                    )))
+            };
 
-        column![
-            hover_info,
-            text(format!("Supports {}", helpers::supported_formats_text()))
-                .size(12)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.3, 0.3, 0.3))),
-            text("✨ Recursive folder scanning with progress feedback")
-                .size(10)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.4, 0.4, 0.4))),
-            text("💡 Tip: You can drop multiple files and folders at once!")
-                .size(9)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
-            scan_summary
-                .as_ref()
-                .map(|summary| {
-                    text(summary)
-                        .size(10)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.3, 0.5, 0.3)))
-                })
-                .unwrap_or_else(|| text("").into()),
-        ]
-        .spacing(6)
-        .align_items(iced::Alignment::Center)
-    } else {
-        let status_text = if app.fonts.is_empty() {
-            text("📁 Drag & drop fonts to get started")
+            column![
+                hover_info,
+                text(format!("Supports {}", helpers::supported_formats_text()))
+                    .size(12)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.3, 0.3, 0.3
+                    ))),
+                text("✨ Recursive folder scanning with progress feedback")
+                    .size(10)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.4, 0.4, 0.4
+                    ))),
+                text("💡 Tip: You can drop multiple files and folders at once!")
+                    .size(9)
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.5, 0.5, 0.5
+                    ))),
+                scan_summary
+                    .as_ref()
+                    .map(|summary| {
+                        text(summary).size(10).style(iced::theme::Text::Color(
+                            iced::Color::from_rgb(0.3, 0.5, 0.3),
+                        ))
+                    })
+                    .unwrap_or_else(|| text("").into()),
+            ]
+            .spacing(6)
+            .align_items(iced::Alignment::Center)
+        } else {
+            let status_text = if app.fonts.is_empty() {
+                text("📁 Drag & drop fonts to get started").size(16).style(
+                    iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.4, 0.0)),
+                )
+            } else {
+                text(format!(
+                    "📁 Drag & drop more fonts ({} loaded)",
+                    app.fonts.len()
+                ))
                 .size(16)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.4, 0.0)))
-        } else {
-            text(format!(
-                "📁 Drag & drop more fonts ({} loaded)",
-                app.fonts.len()
-            ))
-            .size(16)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.2, 0.2, 0.8)))
-        };
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.2, 0.2, 0.8,
+                )))
+            };
 
-        column![
-            status_text,
-            text(format!(
-                "Supports {} via files or folders (recursive)",
-                helpers::supported_formats_text()
-            ))
-            .size(12)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
-            button("Add Fonts...")
-                .on_press(Message::AddFonts)
-                .style(iced::theme::Button::Secondary),
-            scan_summary
-                .as_ref()
-                .map(|summary| {
-                    text(summary)
-                        .size(10)
-                        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.3, 0.5, 0.3)))
-                })
-                .unwrap_or_else(|| text("").into()),
-        ]
-        .spacing(12)
-        .align_items(iced::Alignment::Center)
-    };
+            column![
+                status_text,
+                text(format!(
+                    "Supports {} via files or folders (recursive)",
+                    helpers::supported_formats_text()
+                ))
+                .size(12)
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.5, 0.5, 0.5
+                ))),
+                button("Add Fonts...")
+                    .on_press(Message::AddFonts)
+                    .style(iced::theme::Button::Secondary),
+                scan_summary
+                    .as_ref()
+                    .map(|summary| {
+                        text(summary).size(10).style(iced::theme::Text::Color(
+                            iced::Color::from_rgb(0.3, 0.5, 0.3),
+                        ))
+                    })
+                    .unwrap_or_else(|| text("").into()),
+            ]
+            .spacing(12)
+            .align_items(iced::Alignment::Center)
+        };
 
     let drop_area_style = if app.is_dragging {
         iced::theme::Container::Custom(Box::new(DragActiveStyle))
@@ -365,7 +385,10 @@ fn drop_area_view(app: &TestypfApp) -> Element<'_, Message> {
 }
 
 /// Build the render controls view.
-fn render_controls_view(app: &TestypfApp, render_state: RenderAvailability) -> Element<'_, Message> {
+fn render_controls_view(
+    app: &TestypfApp,
+    render_state: RenderAvailability,
+) -> Element<'_, Message> {
     let render_header = text("Render Controls").size(18);
 
     let sample_text_input = text_input("Enter sample text...", &app.render_settings.sample_text)
@@ -390,11 +413,15 @@ fn render_controls_view(app: &TestypfApp, render_state: RenderAvailability) -> E
     );
     let backend_info = text(format!("Available: {}", backend_descriptions.join(", ")))
         .size(10)
-        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6)));
+        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+            0.6, 0.6, 0.6,
+        )));
 
     let backend_caps = text(app.backend_capabilities(&app.render_settings.backend))
         .size(12)
-        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.35, 0.35, 0.35)));
+        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+            0.35, 0.35, 0.35,
+        )));
 
     let foreground_input = text_input("#RRGGBB or #RRGGBBAA", &app.foreground_input)
         .on_input(Message::ForegroundChanged)
@@ -414,7 +441,9 @@ fn render_controls_view(app: &TestypfApp, render_state: RenderAvailability) -> E
     };
     let background_hint = text(background_hint)
         .size(10)
-        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.45, 0.45, 0.45)));
+        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+            0.45, 0.45, 0.45,
+        )));
 
     let backend_row = column![
         row![
@@ -439,7 +468,9 @@ fn render_controls_view(app: &TestypfApp, render_state: RenderAvailability) -> E
         LayoutMode::SideBySide => "Pairs previews for quick comparison",
     })
     .size(10)
-    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.45, 0.45, 0.45)));
+    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+        0.45, 0.45, 0.45,
+    )));
 
     let layout_controls = column![
         text("Preview Layout").size(16),
@@ -485,7 +516,9 @@ fn render_controls_view(app: &TestypfApp, render_state: RenderAvailability) -> E
         .style(iced::theme::Text::Color(iced::Color::from_rgb(0.45, 0.45, 0.45)));
     let render_hint = text(render_state.hint())
         .size(10)
-        .style(iced::theme::Text::Color(iced::Color::from_rgb(0.45, 0.45, 0.45)));
+        .style(iced::theme::Text::Color(iced::Color::from_rgb(
+            0.45, 0.45, 0.45,
+        )));
 
     column![
         render_header,
@@ -517,12 +550,16 @@ fn preview_area_view<'a>(
     let preview_content: Element<Message> = if app.fonts.is_empty() {
         text("No fonts loaded - add fonts to see previews")
             .size(14)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5)))
+            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                0.5, 0.5, 0.5,
+            )))
             .into()
     } else if visible_indices.is_empty() {
         text("No fonts match the current filter")
             .size(14)
-            .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.3, 0.3)))
+            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                0.5, 0.3, 0.3,
+            )))
             .into()
     } else if app.render_previews.is_empty() {
         container(
@@ -530,7 +567,9 @@ fn preview_area_view<'a>(
                 text("No previews yet").size(14),
                 text(render_state.hint())
                     .size(12)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.5, 0.5, 0.5))),
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.5, 0.5, 0.5
+                    ))),
             ]
             .spacing(6),
         )
@@ -583,12 +622,14 @@ fn preview_card<'a>(
             column![
                 text(format!("{} - Rendered", font.full_name))
                     .size(16)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.2, 0.2, 0.8))),
+                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                        0.2, 0.2, 0.8
+                    ))),
                 text(format!("Sample: \"{}\"", app.render_settings.sample_text)).size(12),
                 image_widget,
-                text(metadata_text)
-                    .size(10)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.6, 0.6, 0.6))),
+                text(metadata_text).size(10).style(iced::theme::Text::Color(
+                    iced::Color::from_rgb(0.6, 0.6, 0.6)
+                )),
             ]
             .spacing(5),
         )
@@ -600,7 +641,9 @@ fn preview_card<'a>(
         container(
             text("Font data not found for render result")
                 .size(14)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.8, 0.3, 0.3))),
+                .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                    0.8, 0.3, 0.3,
+                ))),
         )
         .padding(10)
         .width(Length::FillPortion(1))
@@ -622,9 +665,9 @@ fn overlay_preview_card<'a>(
 
         container(
             column![
-                text(metadata_text)
-                    .size(14)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(0.85, 0.9, 0.95))),
+                text(metadata_text).size(14).style(iced::theme::Text::Color(
+                    iced::Color::from_rgb(0.85, 0.9, 0.95)
+                )),
                 image_widget,
             ]
             .spacing(8),
@@ -634,11 +677,9 @@ fn overlay_preview_card<'a>(
         .width(Length::FillPortion(1))
         .into()
     } else {
-        container(
-            text("Font data missing for render preview")
-                .size(12)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(0.9, 0.7, 0.7))),
-        )
+        container(text("Font data missing for render preview").size(12).style(
+            iced::theme::Text::Color(iced::Color::from_rgb(0.9, 0.7, 0.7)),
+        ))
         .padding(12)
         .style(iced::theme::Container::Transparent)
         .width(Length::FillPortion(1))

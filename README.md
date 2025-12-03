@@ -102,7 +102,7 @@ cargo run --example render_once -- /path/to/font.ttf "Sample text"
 You can also use testypf-core as a library in your own applications:
 
 ```rust
-use testypf_core::{TestypfEngine, RenderSettings, RendererBackend};
+use testypf_core::{FontliftFontSource, RenderSettings, RendererBackend, TestypfEngine};
 
 // Create engine
 let mut engine = TestypfEngine::new()?;
@@ -117,11 +117,14 @@ let settings = RenderSettings {
 
 // Add font
 let font_path = std::path::PathBuf::from("my-font.ttf");
-let font_info = engine.font_manager().add_font(&font_path)?;
+let font_info = engine
+    .font_manager()
+    .add_font(&FontliftFontSource::new(font_path.clone()))?;
 
 // Render text
-let render_result = engine.text_renderer()
-    .render_text(&font_path, &settings)?;
+let render_result = engine
+    .text_renderer()
+    .render_text(font_info.path(), &settings)?;
 
 println!("Rendered {}x{} image", render_result.width, render_result.height);
 ```

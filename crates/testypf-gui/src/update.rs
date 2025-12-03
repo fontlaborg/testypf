@@ -8,6 +8,7 @@ use crate::types::{AppConfig, DropPathKind, ScanStats};
 use iced::{window, Command};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
+use testypf_core::FontliftFontSource;
 
 /// Handle an incoming message and return any resulting command.
 pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message> {
@@ -101,8 +102,7 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
         Message::RenderSelectedOnlyToggled(enabled) => {
             app.render_selected_only = enabled;
             if enabled && app.selected_font.is_none() {
-                app.status =
-                    "Select a font to render when 'selected only' is enabled".to_string();
+                app.status = "Select a font to render when 'selected only' is enabled".to_string();
             } else if enabled {
                 app.status = "Rendering limited to the selected font".to_string();
             } else {
@@ -125,7 +125,11 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
                 settings.font_size = 18.0;
                 let started = Instant::now();
 
-                match app.engine.text_renderer().render_text(&font.path, &settings) {
+                match app
+                    .engine
+                    .text_renderer()
+                    .render_text(font.path(), &settings)
+                {
                     Ok(_) => {
                         let elapsed = started.elapsed().as_millis();
                         app.status = format!(
@@ -148,10 +152,7 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
                 async {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                     rfd::FileDialog::new()
-                        .add_filter(
-                            "Font Files",
-                            &["ttf", "otf", "ttc", "otc", "woff", "woff2"],
-                        )
+                        .add_filter("Font Files", &["ttf", "otf", "ttc", "otc", "woff", "woff2"])
                         .pick_files()
                 },
                 Message::FontsSelected,
@@ -210,7 +211,7 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
         Message::RemoveFont(index) => {
             if index < app.fonts.len() {
                 let font = &app.fonts[index];
-                let _ = app.engine.font_manager().remove_font(&font.path);
+                let _ = app.engine.font_manager().remove_font(&font.source);
                 app.fonts.remove(index);
                 if app.selected_font == Some(index)
                     || app.selected_font.map(|i| i > index).unwrap_or(false)
@@ -330,8 +331,7 @@ pub fn handle_message(app: &mut TestypfApp, message: Message) -> Command<Message
         Message::ExportDestinationChosen(destination) => match destination {
             Some(folder) => match export_previews_to_folder(app, &folder) {
                 Ok(written) => {
-                    app.status =
-                        format!("Exported {} preview(s) to {}", written, folder.display());
+                    app.status = format!("Exported {} preview(s) to {}", written, folder.display());
                 }
                 Err(e) => {
                     app.status = format!("Export failed: {}", e);
@@ -384,7 +384,7 @@ fn handle_render_previews(app: &mut TestypfApp) -> Command<Message> {
 
     let font_paths: Vec<PathBuf> = target_indices
         .iter()
-        .filter_map(|&i| app.fonts.get(i).map(|f| f.path.clone()))
+        .filter_map(|&i| app.fonts.get(i).map(|f| f.path().to_path_buf()))
         .collect();
 
     if font_paths.is_empty() {
@@ -420,7 +420,7 @@ fn handle_render_previews(app: &mut TestypfApp) -> Command<Message> {
             match app
                 .engine
                 .text_renderer()
-                .render_text(&font.path, &app.render_settings)
+                .render_text(font.path(), &app.render_settings)
             {
                 Ok(render_result) => {
                     let duration_ms = per_start.elapsed().as_millis();
@@ -530,7 +530,13 @@ fn process_dropped_paths(app: &mut TestypfApp, paths: Vec<PathBuf>) {
 
     // Add all discovered font files
     for font_path in font_paths {
-        match app.engine.font_manager().add_font(&font_path) {
+        let format = font_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.to_lowercase());
+        let source = FontliftFontSource::new(font_path.clone()).with_format(format);
+
+        match app.engine.font_manager().add_font(&source) {
             Ok(font_info) => {
                 app.fonts.push(font_info);
                 added_count += 1;
@@ -604,10 +610,7 @@ fn process_dropped_paths(app: &mut TestypfApp, paths: Vec<PathBuf>) {
 }
 
 /// Export all current render previews into the given folder.
-fn export_previews_to_folder(
-    app: &TestypfApp,
-    folder: &std::path::Path,
-) -> Result<usize, String> {
+fn export_previews_to_folder(app: &TestypfApp, folder: &std::path::Path) -> Result<usize, String> {
     std::fs::create_dir_all(folder)
         .map_err(|e| format!("Failed to create export folder {:?}: {}", folder, e))?;
 

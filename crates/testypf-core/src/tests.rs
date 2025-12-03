@@ -18,42 +18,46 @@ struct MockInner {
 impl fontlift_core::FontManager for MockPlatformManager {
     fn install_font(
         &self,
-        path: &std::path::Path,
-        scope: FontScope,
+        source: &fontlift_core::FontliftFontSource,
     ) -> fontlift_core::FontResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        inner.installs.push(scope);
-        inner.installed.insert(path.to_path_buf());
+        inner.installs.push(source.scope.unwrap_or(FontScope::User));
+        inner.installed.insert(source.path.clone());
         Ok(())
     }
 
     fn uninstall_font(
         &self,
-        path: &std::path::Path,
-        scope: FontScope,
+        source: &fontlift_core::FontliftFontSource,
     ) -> fontlift_core::FontResult<()> {
         let mut inner = self.inner.lock().unwrap();
-        inner.uninstalls.push(scope);
-        inner.installed.remove(path);
+        inner
+            .uninstalls
+            .push(source.scope.unwrap_or(FontScope::User));
+        inner.installed.remove(&source.path);
         Ok(())
     }
 
     fn remove_font(
         &self,
-        path: &std::path::Path,
-        scope: FontScope,
+        source: &fontlift_core::FontliftFontSource,
     ) -> fontlift_core::FontResult<()> {
-        self.uninstall_font(path, scope)?;
-        std::fs::remove_file(path)?;
+        self.uninstall_font(source)?;
+        std::fs::remove_file(&source.path)?;
         Ok(())
     }
 
-    fn is_font_installed(&self, path: &std::path::Path) -> fontlift_core::FontResult<bool> {
+    fn is_font_installed(
+        &self,
+        source: &fontlift_core::FontliftFontSource,
+    ) -> fontlift_core::FontResult<bool> {
         let inner = self.inner.lock().unwrap();
-        Ok(inner.installed.contains(path))
+        Ok(inner.installed.contains(&source.path))
     }
 
-    fn list_installed_fonts(&self) -> fontlift_core::FontResult<Vec<fontlift_core::FontInfo>> {
+    fn list_installed_fonts(
+        &self,
+    ) -> fontlift_core::FontResult<Vec<fontlift_core::FontliftFontFaceInfo>> {
         Ok(Vec::new())
     }
 
@@ -81,9 +85,9 @@ fn temp_font_path(name: &str) -> PathBuf {
     path
 }
 
-fn sample_font_info(path: PathBuf) -> FontInfo {
-    FontInfo {
-        path,
+fn sample_font_info(path: PathBuf) -> TestypfFontInfo {
+    TestypfFontInfo {
+        source: FontliftFontSource::new(path),
         postscript_name: "DummyPS".to_string(),
         full_name: "Dummy Font".to_string(),
         family_name: "Dummy".to_string(),
@@ -104,7 +108,7 @@ fn install_defaults_to_user_scope() {
 
     let inner = mock.inner.lock().unwrap();
     assert_eq!(inner.installs, vec![FontScope::User]);
-    assert!(inner.installed.contains(&font.path));
+    assert!(inner.installed.contains(&font.source.path));
 }
 
 #[test]
@@ -144,7 +148,7 @@ fn search_criteria_defaults_are_empty() {
 
 #[test]
 fn variation_axis_stores_tag_and_range() {
-    let axis = VariationAxis {
+    let axis = TestypfVariationAxis {
         tag: "wght".to_string(),
         name: "Weight".to_string(),
         min_value: 100.0,

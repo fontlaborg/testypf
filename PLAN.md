@@ -69,7 +69,7 @@ pub struct TestypfEngine {
 // GUI state management
 pub struct AppState {
     engine: TestypfEngine,
-    fonts: Vec<FontInfo>,
+    fonts: Vec<FontliftFontFaceInfo>,
     selected_fonts: HashSet<usize>,
     render_settings: RenderSettings,
     render_cache: HashMap<RenderKey, RenderResult>,
@@ -140,14 +140,14 @@ impl TextRenderer for TypfRenderer {
 // fontlift → testypf integration
 pub struct FontListManager {
     fontlift_manager: Arc<dyn fontlift_core::FontManager>,
-    gui_fonts: Vec<FontInfo>,
+    gui_fonts: Vec<FontliftFontFaceInfo>,
 }
 
 impl FontManager for FontListManager {
-    fn install_font(&self, font: &FontInfo) -> TestypfResult<()> {
+    fn install_font(&self, font: &FontliftFontFaceInfo) -> TestypfResult<()> {
         // Use fontlift to install system font
         self.fontlift_manager
-            .install_font(&font.path, FontScope::User)?;
+            .install_font(&font.source)?;
         Ok(())
     }
 }
@@ -170,9 +170,12 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
-    pub fn search_fonts(&self, criteria: &SearchCriteria) -> TestypfResult<Vec<FontInfo>> {
+    pub fn search_fonts(&self, criteria: &SearchCriteria) -> TestypfResult<Vec<FontliftFontFaceInfo>> {
         let results = self.typg_engine.search(criteria)?;
-        Ok(results.into_iter().map(FontInfo::from).collect())
+        Ok(results
+            .into_iter()
+            .map(FontliftFontFaceInfo::from)
+            .collect())
     }
 }
 ```
@@ -185,7 +188,7 @@ impl DiscoveryManager {
 ```rust
 // Each window as separate Iced application
 pub struct FontListWindow {
-    fonts: Vec<FontInfo>,
+    fonts: Vec<FontliftFontFaceInfo>,
     selected: HashSet<usize>,
     filter: String,
 }
@@ -282,13 +285,13 @@ pub struct RenderCache {
 }
 
 impl RenderCache {
-    pub fn render_dirty(&mut self, engine: &mut TestypfEngine, fonts: &[FontInfo], settings: &RenderSettings) -> Vec<(usize, RenderResult)> {
+    pub fn render_dirty(&mut self, engine: &mut TestypfEngine, fonts: &[FontliftFontFaceInfo], settings: &RenderSettings) -> Vec<(usize, RenderResult)> {
         let mut results = Vec::new();
         
         for &font_index in &self.dirty_fonts.clone() {
             if let Some(font) = fonts.get(font_index) {
                 let key = RenderKey::new(font_index, settings);
-                if let Ok(result) = engine.render_preview(&font.path, settings) {
+                if let Ok(result) = engine.render_preview(&font.source.path, settings) {
                     self.cache.insert(key, result.clone());
                     results.push((font_index, result));
                 }

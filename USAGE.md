@@ -74,7 +74,7 @@ TestYPF can also be used as a library in your own applications:
 ### Basic Usage
 
 ```rust
-use testypf_core::{TestypfEngine, RenderSettings, RendererBackend};
+use testypf_core::{FontliftFontSource, RenderSettings, RendererBackend, TestypfEngine};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create engine
@@ -90,11 +90,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Add font
     let font_path = std::path::PathBuf::from("my-font.ttf");
-    let font_info = engine.font_manager().add_font(&font_path)?;
-    
+    let font_source = FontliftFontSource::new(font_path.clone());
+    let font_info = engine.font_manager().add_font(&font_source)?;
+
     // Render text
-    let render_result = engine.text_renderer()
-        .render_text(&font_path, &settings)?;
+    let render_result = engine
+        .text_renderer()
+        .render_text(font_info.path(), &settings)?;
     
     println!("Rendered {}x{} image", render_result.width, render_result.height);
     
@@ -105,18 +107,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Font Management
 
 ```rust
-use testypf_core::{FontInfo, FontManager};
+use testypf_core::{FontliftFontSource, FontManager, TestypfFontInfo};
 
 let font_manager = engine.font_manager();
 
 // Add fonts
-let font_path = std::path::PathBuf::from("arial.ttf");
-let font_info = font_manager.add_font(&font_path)?;
+let font_source = FontliftFontSource::new(std::path::PathBuf::from("arial.ttf"));
+let font_info = font_manager.add_font(&font_source)?;
 
 // List loaded fonts
 let fonts = font_manager.get_fonts()?;
 for font in fonts {
-    println!("{}: {} ({})", font.family_name, font.style, font.path.display());
+    println!(
+        "{}: {} ({})",
+        font.family_name,
+        font.style,
+        font.path().display()
+    );
 }
 
 // Install font system-wide
@@ -131,9 +138,12 @@ if font_info.is_installed {
 ### Multiple Backend Rendering
 
 ```rust
-use testypf_core::{RendererBackend, RenderSettings};
+use testypf_core::{FontliftFontSource, RendererBackend, RenderSettings};
 
 let text_renderer = engine.text_renderer();
+let font_info = engine
+    .font_manager()
+    .add_font(&FontliftFontSource::new(std::path::PathBuf::from("my-font.ttf")))?;
 
 // List available backends
 let backends = text_renderer.get_backends();
@@ -149,7 +159,7 @@ text_renderer.set_backend(RendererBackend::Json)?;
 let mut results = Vec::new();
 for backend in backends {
     text_renderer.set_backend(backend.clone())?;
-    let result = text_renderer.render_text(&font_path, &settings)?;
+    let result = text_renderer.render_text(font_info.path(), &settings)?;
     results.push((backend, result));
 }
 ```
@@ -217,9 +227,11 @@ let renderer = engine.text_renderer();
 TestYPF provides comprehensive error handling:
 
 ```rust
-use testypf_core::TestypfError;
+use testypf_core::{FontliftFontSource, TestypfError};
 
-match font_manager.add_font(&font_path) {
+let font_source = FontliftFontSource::new(font_path.clone());
+
+match font_manager.add_font(&font_source) {
     Ok(font_info) => println!("Font loaded: {}", font_info.family_name),
     Err(TestypfError::InvalidFont(msg)) => {
         println!("Invalid font file: {}", msg);

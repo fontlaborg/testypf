@@ -43,10 +43,15 @@ Message::RenderPreviews => {
             async move {
                 let mut results = Vec::new();
                 for (index, font) in fonts.iter().enumerate() {
-                    // Use testypf-core to render
-                    match engine.text_renderer().render_text(&font.path, &settings) {
+                    // Use testypf-core to render from a FontliftFontSource-backed face
+                    match engine.text_renderer().render_text(&font.source.path, &settings) {
                         Ok(result) => results.push((index, result)),
-                        Err(e) => return Message::RenderError(format!("Failed to render {}: {}", font.full_name, e))
+                        Err(e) => {
+                            return Message::RenderError(format!(
+                                "Failed to render {}: {}",
+                                font.full_name, e
+                            ))
+                        }
                     }
                 }
                 Message::RenderCompleted(results)
@@ -117,7 +122,7 @@ let preview_area: Element<Message> = if self.fonts.is_empty() {
 ```rust
 struct TestypfApp {
     engine: TestypfEngine,
-    fonts: Vec<FontInfo>,
+    fonts: Vec<FontliftFontFaceInfo>,
     render_settings: RenderSettings,
     status: String,
     render_results: Vec<(usize, RenderResult)>, // Add this field
@@ -241,51 +246,60 @@ Font install/uninstall uses dummy implementation that only flips boolean flags.
 ```rust
 // Update FontListManager in lib.rs
 impl FontManager for FontListManager {
-    fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
-        Use fontlift_core APIs:
+    fn install_font(&mut self, source: &FontliftFontSource) -> TestypfResult<()> {
         // Get fontlift manager
         let fontlift_manager = fontlift_core::FontManager::new()?;
-        
+
         // Install font with proper scope detection
         let scope = if has_admin_permissions() {
             FontScope::System
         } else {
             FontScope::User
         };
-        
-        fontlift_manager.install_font(&font.path, scope)?;
-        
+
+        fontlift_manager.install_font(source, scope)?;
+
         // Update internal state
-        if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+        if let Some(index) = self
+            .fonts
+            .iter_mut()
+            .position(|f| f.source.path == source.path && f.source.face_index == source.face_index)
+        {
             self.fonts[index].is_installed = true;
         }
-        
+
         Ok(())
     }
-    
-    fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
+
+    fn uninstall_font(&mut self, source: &FontliftFontSource) -> TestypfResult<()> {
         // Similar implementation using fontlift_core
         let fontlift_manager = fontlift_core::FontManager::new()?;
-        
-        fontlift_manager.uninstall_font(&font.path)?;
-        
+
+        fontlift_manager.uninstall_font(source)?;
+
         // Update internal state
-        if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+        if let Some(index) = self
+            .fonts
+            .iter_mut()
+            .position(|f| f.source.path == source.path && f.source.face_index == source.face_index)
+        {
             self.fonts[index].is_installed = false;
         }
-        
+
         Ok(())
     }
-    
+
     fn sync_installed_status(&mut self) -> TestypfResult<()> {
         // Check actual system installation status
         let fontlift_manager = fontlift_core::FontManager::new()?;
-        let installed_fonts = fontlift_manager.list_installed_fonts()?;
-        
-        for font in &mut self.fonts {
-            font.is_installed = installed_fonts.contains(&font.path);
+        let installed_sources = fontlift_manager.list_installed_fonts()?;
+
+        for face in &mut self.fonts {
+            face.is_installed = installed_sources.iter().any(|src| {
+                src.path == face.source.path && src.face_index == face.source.face_index
+            });
         }
-        
+
         Ok(())
     }
 }

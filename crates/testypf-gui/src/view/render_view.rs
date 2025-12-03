@@ -9,11 +9,12 @@ use iced::{Element, Length};
 
 /// Render the transparent render window view.
 pub fn render(app: &TestypfApp) -> Element<'_, Message> {
-    let header = text("Render Previews (Transparent Window)")
-        .size(18)
-        .style(iced::theme::Text::Color(iced::Color::from_rgb(
-            0.9, 0.9, 0.95,
-        )));
+    let header =
+        text("Render Previews (Transparent Window)")
+            .size(18)
+            .style(iced::theme::Text::Color(iced::Color::from_rgb(
+                0.9, 0.9, 0.95,
+            )));
 
     let subtitle = text("Use the main window to add fonts and trigger renders.")
         .size(12)
@@ -81,11 +82,9 @@ fn overlay_preview_card<'a>(
 
         container(
             column![
-                text(metadata_text)
-                    .size(14)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.85, 0.9, 0.95,
-                    ))),
+                text(metadata_text).size(14).style(iced::theme::Text::Color(
+                    iced::Color::from_rgb(0.85, 0.9, 0.95,)
+                )),
                 image_widget,
             ]
             .spacing(8),
@@ -95,13 +94,9 @@ fn overlay_preview_card<'a>(
         .width(Length::FillPortion(1))
         .into()
     } else {
-        container(
-            text("Font data missing for render preview")
-                .size(12)
-                .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                    0.9, 0.7, 0.7,
-                ))),
-        )
+        container(text("Font data missing for render preview").size(12).style(
+            iced::theme::Text::Color(iced::Color::from_rgb(0.9, 0.7, 0.7)),
+        ))
         .padding(12)
         .style(iced::theme::Container::Transparent)
         .width(Length::FillPortion(1))
@@ -129,11 +124,9 @@ fn preview_card<'a>(
                     ))),
                 text(format!("Sample: \"{}\"", app.render_settings.sample_text)).size(12),
                 image_widget,
-                text(metadata_text)
-                    .size(10)
-                    .style(iced::theme::Text::Color(iced::Color::from_rgb(
-                        0.6, 0.6, 0.6
-                    ))),
+                text(metadata_text).size(10).style(iced::theme::Text::Color(
+                    iced::Color::from_rgb(0.6, 0.6, 0.6)
+                )),
             ]
             .spacing(5),
         )

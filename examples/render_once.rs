@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-use testypf_core::{RenderSettings, TestypfEngine};
+use testypf_core::{FontliftFontSource, RenderSettings, TestypfEngine};
 
 fn usage() -> ! {
     eprintln!("Usage: cargo run --example render_once -- <font-path> [sample text]");
@@ -16,7 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "The quick brown fox jumps over the lazy dog".to_string());
 
     let mut engine = TestypfEngine::new()?;
-    let font = engine.font_manager().add_font(&font_path)?;
+    let source = FontliftFontSource::new(font_path);
+    let font = engine.font_manager().add_font(&source)?;
 
     let settings = RenderSettings {
         sample_text,

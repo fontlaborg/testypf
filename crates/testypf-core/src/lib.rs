@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use thiserror::Error;
 
-pub use fontlift_core::FontScope;
+pub use fontlift_core::{FontScope, FontliftFontSource};
 
 // Re-export discovery types for GUI use
 pub use discovery::{DiscoveryManager, FontDiscoveryResult, SearchCriteria};
@@ -36,7 +36,7 @@ pub type TestypfResult<T> = Result<T, TestypfError>;
 
 /// Variable font axis information
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct VariationAxis {
+pub struct TestypfVariationAxis {
     /// Four-character axis tag (e.g., "wght", "wdth", "ital")
     pub tag: String,
 
@@ -53,11 +53,11 @@ pub struct VariationAxis {
     pub max_value: f32,
 }
 
-/// Font information for GUI display
+/// Font face information for GUI display
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct FontInfo {
-    /// File path to the font
-    pub path: PathBuf,
+pub struct TestypfFontInfo {
+    /// Source information for the font (path, format, optional index)
+    pub source: FontliftFontSource,
 
     /// PostScript name
     pub postscript_name: String,
@@ -75,7 +75,17 @@ pub struct FontInfo {
     pub is_installed: bool,
 
     /// Variable font axes (empty if not a variable font)
-    pub variation_axes: Vec<VariationAxis>,
+    pub variation_axes: Vec<TestypfVariationAxis>,
+}
+
+impl TestypfFontInfo {
+    pub fn path(&self) -> &PathBuf {
+        &self.source.path
+    }
+
+    pub fn with_scope(&self, scope: FontScope) -> FontliftFontSource {
+        self.source.clone().with_scope(Some(scope))
+    }
 }
 
 /// Render settings for text rendering
@@ -165,16 +175,16 @@ pub struct RenderResult {
 /// Font manager interface
 pub trait FontManager: Send + Sync {
     /// Add a font to the font list
-    fn add_font(&mut self, path: &PathBuf) -> TestypfResult<FontInfo>;
+    fn add_font(&mut self, source: &FontliftFontSource) -> TestypfResult<TestypfFontInfo>;
 
     /// Remove a font from the font list
-    fn remove_font(&mut self, path: &PathBuf) -> TestypfResult<()>;
+    fn remove_font(&mut self, source: &FontliftFontSource) -> TestypfResult<()>;
 
     /// Get all fonts
-    fn get_fonts(&self) -> TestypfResult<Vec<FontInfo>>;
+    fn get_fonts(&self) -> TestypfResult<Vec<TestypfFontInfo>>;
 
     /// Check whether a font path is installed on the system
-    fn is_font_installed(&self, path: &PathBuf) -> TestypfResult<bool>;
+    fn is_font_installed(&self, source: &FontliftFontSource) -> TestypfResult<bool>;
 
     /// Set target installation scope (user/system)
     fn set_install_scope(&mut self, scope: FontScope);
@@ -183,10 +193,10 @@ pub trait FontManager: Send + Sync {
     fn install_scope(&self) -> FontScope;
 
     /// Install font using fontlift
-    fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()>;
+    fn install_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()>;
 
     /// Uninstall font using fontlift
-    fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()>;
+    fn uninstall_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()>;
 }
 
 /// Text renderer interface
@@ -252,12 +262,14 @@ impl TestypfEngine {
     pub fn render_previews(
         &mut self,
         settings: &RenderSettings,
-    ) -> TestypfResult<Vec<(FontInfo, RenderResult)>> {
+    ) -> TestypfResult<Vec<(TestypfFontInfo, RenderResult)>> {
         let fonts = self.font_manager.get_fonts()?;
         let mut results = Vec::new();
 
         for font in fonts {
-            let render_result = self.text_renderer.render_text(&font.path, settings)?;
+            let render_result = self
+                .text_renderer
+                .render_text(&font.source.path, settings)?;
             results.push((font, render_result));
         }
 
@@ -273,7 +285,7 @@ pub mod font {
 
     /// Font list manager that tracks fonts for the GUI
     pub struct FontListManager {
-        fonts: Vec<FontInfo>,
+        fonts: Vec<TestypfFontInfo>,
         install_scope: FontScope,
         #[cfg(test)]
         platform_override: Option<Arc<dyn fontlift_core::FontManager>>,
@@ -297,13 +309,13 @@ pub mod font {
         }
 
         /// Extract font information from file using read-fonts crate and FontLift validation
-        fn extract_font_info(&self, path: &PathBuf) -> TestypfResult<FontInfo> {
+        fn extract_font_info(&self, source: &FontliftFontSource) -> TestypfResult<TestypfFontInfo> {
             // Use FontLift's validation first
-            fontlift_core::validation::validate_font_file(path)
+            fontlift_core::validation::validate_font_file(&source.path)
                 .map_err(|e| TestypfError::InvalidFont(format!("Font validation failed: {}", e)))?;
 
             // Read font file
-            let font_data = std::fs::read(path).map_err(|e| {
+            let font_data = std::fs::read(&source.path).map_err(|e| {
                 TestypfError::InvalidFont(format!("Failed to read font file: {}", e))
             })?;
 
@@ -315,7 +327,8 @@ pub mod font {
 
             // For now, use filename-based extraction since FontLift validation already confirmed it's a valid font
             // The font parsing and name table extraction can be improved later
-            let postscript_name = path
+            let postscript_name = source
+                .path
                 .file_stem()
                 .and_then(|n| n.to_str())
                 .unwrap_or("Unknown")
@@ -325,8 +338,8 @@ pub mod font {
             let family_name = postscript_name.clone();
             let style = "Regular".to_string();
 
-            let mut font_info = FontInfo {
-                path: path.clone(),
+            let mut font_info = TestypfFontInfo {
+                source: source.clone(),
                 postscript_name,
                 full_name,
                 family_name,
@@ -337,7 +350,7 @@ pub mod font {
 
             // Check if font is already installed using FontLift
             if let Ok(font_manager) = self.create_platform_font_manager() {
-                match font_manager.is_font_installed(path) {
+                match font_manager.is_font_installed(source) {
                     Ok(is_installed) => {
                         font_info.is_installed = is_installed;
                     }
@@ -352,7 +365,7 @@ pub mod font {
         }
 
         /// Extract variation axes from font's fvar table
-        fn extract_variation_axes(font: &FontRef) -> Vec<VariationAxis> {
+        fn extract_variation_axes(font: &FontRef) -> Vec<TestypfVariationAxis> {
             let fvar = match font.fvar() {
                 Ok(fvar) => fvar,
                 Err(_) => return Vec::new(), // Not a variable font
@@ -378,7 +391,7 @@ pub mod font {
                         _ => tag.clone(),
                     };
 
-                    VariationAxis {
+                    TestypfVariationAxis {
                         tag,
                         name,
                         min_value: axis.min_value().to_f32(),
@@ -399,7 +412,7 @@ pub mod font {
         }
 
         #[cfg(test)]
-        pub fn push_font_for_tests(&mut self, font: FontInfo) {
+        pub fn push_font_for_tests(&mut self, font: TestypfFontInfo) {
             self.fonts.push(font);
         }
 
@@ -466,11 +479,11 @@ pub mod font {
             self.install_scope
         }
 
-        fn add_font(&mut self, path: &PathBuf) -> TestypfResult<FontInfo> {
-            let font_info = self.extract_font_info(path)?;
+        fn add_font(&mut self, source: &FontliftFontSource) -> TestypfResult<TestypfFontInfo> {
+            let font_info = self.extract_font_info(source)?;
 
             // Check if font already exists
-            if self.fonts.iter().any(|f| f.path == *path) {
+            if self.fonts.iter().any(|f| f.source.path == source.path) {
                 return Err(TestypfError::InvalidFont("Font already added".to_string()));
             }
 
@@ -478,16 +491,16 @@ pub mod font {
             Ok(font_info)
         }
 
-        fn remove_font(&mut self, path: &PathBuf) -> TestypfResult<()> {
-            self.fonts.retain(|f| f.path != *path);
+        fn remove_font(&mut self, source: &FontliftFontSource) -> TestypfResult<()> {
+            self.fonts.retain(|f| f.source.path != source.path);
             Ok(())
         }
 
-        fn get_fonts(&self) -> TestypfResult<Vec<FontInfo>> {
+        fn get_fonts(&self) -> TestypfResult<Vec<TestypfFontInfo>> {
             Ok(self.fonts.clone())
         }
 
-        fn is_font_installed(&self, path: &PathBuf) -> TestypfResult<bool> {
+        fn is_font_installed(&self, source: &FontliftFontSource) -> TestypfResult<bool> {
             let font_manager = self.platform_manager().map_err(|e| {
                 TestypfError::FontManagementFailed(format!(
                     "Failed to create platform font manager: {}",
@@ -495,7 +508,7 @@ pub mod font {
                 ))
             })?;
 
-            font_manager.is_font_installed(path).map_err(|e| {
+            font_manager.is_font_installed(source).map_err(|e| {
                 TestypfError::FontManagementFailed(format!(
                     "Failed to check font installation status: {}",
                     e
@@ -503,7 +516,7 @@ pub mod font {
             })
         }
 
-        fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
+        fn install_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()> {
             // Use real FontLift integration
             let font_manager = self.platform_manager().map_err(|e| {
                 TestypfError::FontManagementFailed(format!(
@@ -513,23 +526,27 @@ pub mod font {
             })?;
 
             // Validate font before installation
-            fontlift_core::validation::validate_font_file(&font.path).map_err(|e| {
+            fontlift_core::validation::validate_font_file(&font.source.path).map_err(|e| {
                 TestypfError::FontManagementFailed(format!("Font validation failed: {}", e))
             })?;
 
+            let source_with_scope = font.with_scope(self.install_scope);
+
             // Install font at user level (safer default)
-            font_manager
-                .install_font(&font.path, self.install_scope)
-                .map_err(|e| {
-                    TestypfError::FontManagementFailed(format!("Font installation failed: {}", e))
-                })?;
+            font_manager.install_font(&source_with_scope).map_err(|e| {
+                TestypfError::FontManagementFailed(format!("Font installation failed: {}", e))
+            })?;
 
             // Update local font list state
-            if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+            if let Some(index) = self
+                .fonts
+                .iter_mut()
+                .position(|f| f.source.path == font.source.path)
+            {
                 self.fonts[index].is_installed = true;
 
                 // Verify installation was successful
-                match font_manager.is_font_installed(&font.path) {
+                match font_manager.is_font_installed(&font.source) {
                     Ok(true) => {
                         // Installation confirmed
                     }
@@ -553,7 +570,7 @@ pub mod font {
             Ok(())
         }
 
-        fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()> {
+        fn uninstall_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()> {
             // Use real FontLift integration
             let font_manager = self.platform_manager().map_err(|e| {
                 TestypfError::FontManagementFailed(format!(
@@ -563,7 +580,7 @@ pub mod font {
             })?;
 
             // Check if font is actually installed before uninstalling
-            let is_installed = font_manager.is_font_installed(&font.path).map_err(|e| {
+            let is_installed = font_manager.is_font_installed(&font.source).map_err(|e| {
                 TestypfError::FontManagementFailed(format!(
                     "Failed to check font installation status: {}",
                     e
@@ -576,19 +593,25 @@ pub mod font {
                 ));
             }
 
+            let source_with_scope = font.with_scope(self.install_scope);
+
             // Uninstall font from user level
             font_manager
-                .uninstall_font(&font.path, self.install_scope)
+                .uninstall_font(&source_with_scope)
                 .map_err(|e| {
                     TestypfError::FontManagementFailed(format!("Font uninstallation failed: {}", e))
                 })?;
 
             // Update local font list state
-            if let Some(index) = self.fonts.iter_mut().position(|f| f.path == font.path) {
+            if let Some(index) = self
+                .fonts
+                .iter_mut()
+                .position(|f| f.source.path == font.source.path)
+            {
                 self.fonts[index].is_installed = false;
 
                 // Verify uninstallation was successful
-                match font_manager.is_font_installed(&font.path) {
+                match font_manager.is_font_installed(&font.source) {
                     Ok(false) => {
                         // Uninstallation confirmed
                     }
@@ -846,7 +869,7 @@ pub mod render {
 pub mod discovery {
     use super::*;
     use typg_core::query::Query;
-    use typg_core::search::{search, FontMatch, SearchOptions};
+    use typg_core::search::{search, SearchOptions, TypgFontFaceMatch};
 
     /// Search criteria for font discovery
     #[derive(Debug, Clone, Default)]
@@ -882,10 +905,10 @@ pub mod discovery {
         pub ttc_index: Option<u32>,
     }
 
-    impl From<FontMatch> for FontDiscoveryResult {
-        fn from(m: FontMatch) -> Self {
+    impl From<TypgFontFaceMatch> for FontDiscoveryResult {
+        fn from(m: TypgFontFaceMatch) -> Self {
             Self {
-                path: m.metadata.path,
+                path: m.source.path,
                 names: m.metadata.names,
                 features: m
                     .metadata
@@ -900,7 +923,7 @@ pub mod discovery {
                     .map(|t| t.to_string())
                     .collect(),
                 is_variable: m.metadata.is_variable,
-                ttc_index: m.metadata.ttc_index,
+                ttc_index: m.source.ttc_index,
             }
         }
     }

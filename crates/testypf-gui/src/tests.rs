@@ -12,7 +12,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
-use testypf_core::{FontInfo, RenderResult, RenderSettings, RendererBackend};
+use testypf_core::{
+    FontliftFontSource, RenderResult, RenderSettings, RendererBackend, TestypfFontInfo,
+};
 
 #[test]
 fn render_window_settings_are_transparent() {
@@ -56,8 +58,8 @@ fn image_handle_from_render_accepts_valid_rgba() {
 
 #[test]
 fn set_install_state_updates_flag() {
-    let mut fonts = vec![FontInfo {
-        path: PathBuf::from("demo.ttf"),
+    let mut fonts = vec![TestypfFontInfo {
+        source: FontliftFontSource::new(PathBuf::from("demo.ttf")),
         postscript_name: "DemoPS".into(),
         full_name: "Demo Font".into(),
         family_name: "Demo".into(),
@@ -74,7 +76,7 @@ fn set_install_state_updates_flag() {
 
 #[test]
 fn set_install_state_out_of_bounds_is_noop() {
-    let mut fonts = Vec::<FontInfo>::new();
+    let mut fonts = Vec::<TestypfFontInfo>::new();
 
     let updated = helpers::set_install_state(&mut fonts, 3, true);
 
@@ -93,8 +95,8 @@ fn image_handle_from_render_rejects_length_mismatch() {
         format: "Rgba8".to_string(),
     };
 
-    let err =
-        helpers::image_handle_from_render(&render_result).expect_err("Expected length mismatch error");
+    let err = helpers::image_handle_from_render(&render_result)
+        .expect_err("Expected length mismatch error");
 
     assert!(err.contains("Pixel data length mismatch"));
 }
@@ -250,7 +252,13 @@ fn cache_hit_only_when_settings_and_fonts_match() {
         "Changed settings invalidates cache"
     );
     assert!(
-        !helpers::should_use_cache(&Some(settings.clone()), &other_fonts, &settings, &fonts, true),
+        !helpers::should_use_cache(
+            &Some(settings.clone()),
+            &other_fonts,
+            &settings,
+            &fonts,
+            true
+        ),
         "Changed fonts invalidate cache"
     );
 }
@@ -305,8 +313,8 @@ fn format_file_size_scales_units() {
 
 #[test]
 fn preview_metadata_text_includes_duration_and_backend() {
-    let font = FontInfo {
-        path: PathBuf::from("demo.ttf"),
+    let font = TestypfFontInfo {
+        source: FontliftFontSource::new(PathBuf::from("demo.ttf")),
         postscript_name: "DemoPS".into(),
         full_name: "Demo Font".into(),
         family_name: "Demo".into(),
@@ -336,8 +344,8 @@ fn preview_metadata_text_includes_duration_and_backend() {
 
 #[test]
 fn font_metadata_lines_include_path_and_install_state() {
-    let font = FontInfo {
-        path: PathBuf::from("/tmp/metadata/demo.ttf"),
+    let font = TestypfFontInfo {
+        source: FontliftFontSource::new(PathBuf::from("/tmp/metadata/demo.ttf")),
         postscript_name: "DemoPS".into(),
         full_name: "Demo Font".into(),
         family_name: "Demo".into(),

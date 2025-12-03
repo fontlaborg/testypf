@@ -12,12 +12,12 @@ use iced::{
     window, Command, Element, Event, Settings, Subscription, Theme,
 };
 use std::path::PathBuf;
-use testypf_core::{FontInfo, RenderSettings, RendererBackend, TestypfEngine};
+use testypf_core::{RenderSettings, RendererBackend, TestypfEngine, TestypfFontInfo};
 
 /// Main application state.
 pub struct TestypfApp {
     pub engine: TestypfEngine,
-    pub fonts: Vec<FontInfo>,
+    pub fonts: Vec<TestypfFontInfo>,
     pub render_settings: RenderSettings,
     pub status: String,
     pub render_previews: Vec<RenderPreview>,
@@ -105,19 +105,13 @@ impl multi_window::Application for TestypfApp {
 
     fn subscription(&self) -> Subscription<Message> {
         event::listen_with(|event, _status| match event {
-            Event::Window(id, iced::window::Event::FileHovered(path))
-                if id == window::Id::MAIN =>
-            {
+            Event::Window(id, iced::window::Event::FileHovered(path)) if id == window::Id::MAIN => {
                 Some(Message::FileHovered(path))
             }
-            Event::Window(id, iced::window::Event::FileDropped(path))
-                if id == window::Id::MAIN =>
-            {
+            Event::Window(id, iced::window::Event::FileDropped(path)) if id == window::Id::MAIN => {
                 Some(Message::FilesDropped(vec![path]))
             }
-            Event::Window(id, iced::window::Event::FilesHoveredLeft)
-                if id == window::Id::MAIN =>
-            {
+            Event::Window(id, iced::window::Event::FilesHoveredLeft) if id == window::Id::MAIN => {
                 Some(Message::DragLeave)
             }
             Event::Window(id, iced::window::Event::Closed) => Some(Message::WindowClosed(id)),
@@ -192,7 +186,7 @@ impl TestypfApp {
     }
 
     /// Check if a font matches the current filter.
-    pub fn font_matches_filter(&self, font: &FontInfo) -> bool {
+    pub fn font_matches_filter(&self, font: &TestypfFontInfo) -> bool {
         if self.font_filter.trim().is_empty() {
             return true;
         }
@@ -203,7 +197,7 @@ impl TestypfApp {
             font.family_name.to_lowercase(),
             font.style.to_lowercase(),
             font.postscript_name.to_lowercase(),
-            font.path.display().to_string().to_lowercase(),
+            font.path().display().to_string().to_lowercase(),
         ];
 
         fields.iter().any(|field| field.contains(&needle))
@@ -240,8 +234,8 @@ impl TestypfApp {
             return;
         }
 
-        let path = self.fonts[index].path.clone();
-        match self.engine.font_manager().is_font_installed(&path) {
+        let source = self.fonts[index].source.clone();
+        match self.engine.font_manager().is_font_installed(&source) {
             Ok(is_installed) => {
                 helpers::set_install_state(&mut self.fonts, index, is_installed);
             }

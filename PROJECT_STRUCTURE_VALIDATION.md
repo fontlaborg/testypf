@@ -103,22 +103,22 @@ default = ["iced/default"]
 #### Architecture
 - ✅ **Clean Separation**: Font management and text rendering as separate traits
 - ✅ **Error Handling**: Comprehensive TestypfError enum with ThisError
-- ✅ **Data Structures**: Proper FontInfo, RenderSettings, and RenderResult types
+- ✅ **Data Structures**: Proper TestypfFontInfo, RenderSettings, and RenderResult types
 - ✅ **Real Integration**: Actual Typf Python bindings integration
 
 #### Font Management Module
 ```rust
 pub mod font {
     // ✅ Real font metadata extraction using read-fonts crate
-    fn extract_font_info(&self, path: &PathBuf) -> TestypfResult<FontInfo>
+    fn extract_font_info(&self, source: &FontliftFontSource) -> TestypfResult<TestypfFontInfo>
     
     // ✅ Complete FontManager trait implementation
     impl FontManager for FontListManager {
-        fn add_font(&mut self, path: &PathBuf) -> TestypfResult<FontInfo>
-        fn remove_font(&mut self, path: &PathBuf) -> TestypfResult<()>
-        fn get_fonts(&self) -> TestypfResult<Vec<FontInfo>>
-        fn install_font(&mut self, font: &FontInfo) -> TestypfResult<()> // TODO: real fontlift
-        fn uninstall_font(&mut self, font: &FontInfo) -> TestypfResult<()> // TODO: real fontlift
+        fn add_font(&mut self, source: &FontliftFontSource) -> TestypfResult<TestypfFontInfo>
+        fn remove_font(&mut self, source: &FontliftFontSource) -> TestypfResult<()>
+        fn get_fonts(&self) -> TestypfResult<Vec<TestypfFontInfo>>
+        fn install_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()> // TODO: real fontlift
+        fn uninstall_font(&mut self, font: &TestypfFontInfo) -> TestypfResult<()> // TODO: real fontlift
     }
 }
 ```
@@ -163,7 +163,7 @@ enum Message {
 // ✅ Complete application state
 struct TestypfApp {
     engine: TestypfEngine,
-    fonts: Vec<FontInfo>,
+    fonts: Vec<TestypfFontInfo>,
     render_settings: RenderSettings,
     status: String,
 }

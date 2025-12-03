@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use testypf_core::{FontInfo, RenderResult, RenderSettings, RendererBackend};
+use testypf_core::{RenderResult, RenderSettings, RendererBackend, TestypfFontInfo};
 
 // =============================================================================
 // Font File Operations
@@ -138,7 +138,7 @@ pub fn supported_formats_text() -> String {
 // =============================================================================
 
 /// Derive user-friendly metadata lines for a font.
-pub fn font_metadata_lines(font: &FontInfo, file_size_bytes: Option<u64>) -> Vec<String> {
+pub fn font_metadata_lines(font: &TestypfFontInfo, file_size_bytes: Option<u64>) -> Vec<String> {
     let mut lines = vec![
         format!("Name: {}", font.full_name),
         format!("Family: {}", font.family_name),
@@ -158,7 +158,7 @@ pub fn font_metadata_lines(font: &FontInfo, file_size_bytes: Option<u64>) -> Vec
         lines.push(format!("File size: {}", format_file_size(size)));
     }
 
-    lines.push(format!("Path: {}", font.path.display()));
+    lines.push(format!("Path: {}", font.path().display()));
     lines
 }
 
@@ -240,7 +240,7 @@ pub fn build_render_preview(
 /// Human-readable metadata string for a render preview.
 pub fn preview_metadata_text(
     preview: &RenderPreview,
-    font: &FontInfo,
+    font: &TestypfFontInfo,
     settings: &RenderSettings,
 ) -> String {
     format!(
@@ -397,7 +397,7 @@ pub fn shortcut_to_message(event: &keyboard::Event) -> Option<Message> {
 // =============================================================================
 
 /// Update the cached install flag for a font.
-pub fn set_install_state(fonts: &mut [FontInfo], index: usize, is_installed: bool) -> bool {
+pub fn set_install_state(fonts: &mut [TestypfFontInfo], index: usize, is_installed: bool) -> bool {
     if let Some(font) = fonts.get_mut(index) {
         font.is_installed = is_installed;
         true
@@ -507,8 +507,7 @@ pub fn load_config() -> Result<AppConfig, String> {
 
 /// Load configuration from a specific path.
 pub fn load_config_from(path: &Path) -> Result<AppConfig, String> {
-    let contents =
-        fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
+    let contents = fs::read_to_string(path).map_err(|e| format!("Failed to read config: {}", e))?;
     serde_json::from_str(&contents).map_err(|e| format!("Failed to parse config: {}", e))
 }
 
@@ -542,7 +541,10 @@ pub fn layout_row_count(preview_count: usize, mode: LayoutMode) -> usize {
 }
 
 /// Arrange preview cards into rows based on the selected layout.
-pub fn layout_previews(previews: Vec<Element<'_, Message>>, mode: LayoutMode) -> Element<'_, Message> {
+pub fn layout_previews(
+    previews: Vec<Element<'_, Message>>,
+    mode: LayoutMode,
+) -> Element<'_, Message> {
     use iced::widget::{column, container, row};
     use iced::Length;
 
