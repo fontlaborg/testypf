@@ -4362,6 +4362,7 @@ name = "typg-core"
 version = "1.0.1"
 dependencies = [
  "anyhow",
+ "rayon",
  "read-fonts 0.36.0",
  "regex",
  "serde",
