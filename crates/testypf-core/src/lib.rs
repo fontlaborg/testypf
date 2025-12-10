@@ -1017,6 +1017,7 @@ pub mod discovery {
             let query = self.build_query(criteria)?;
             let opts = SearchOptions {
                 follow_symlinks: criteria.follow_symlinks,
+                jobs: None,
             };
 
             let matches = search(roots, &query, &opts)
